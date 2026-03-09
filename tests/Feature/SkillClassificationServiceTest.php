@@ -1,0 +1,574 @@
+<?php
+
+use App\Models\Skill;
+use App\Models\SkillMatch;
+use App\Services\SettingsService;
+use App\Services\SkillClassificationService;
+use App\Services\SkillSearchService;
+use Illuminate\Support\Facades\Cache;
+
+beforeEach(function () {
+    $this->settings = app(SettingsService::class);
+    $this->skillService = app(SkillSearchService::class);
+    $this->service = new SkillClassificationService($this->settings, $this->skillService);
+
+    // Clear cache before each test
+    Cache::flush();
+
+    // Clear tables
+    SkillMatch::query()->delete();
+    Skill::query()->delete();
+});
+
+afterEach(function () {
+    // Clean up
+    SkillMatch::query()->delete();
+    Skill::query()->delete();
+    Cache::flush();
+});
+
+describe('SkillClassificationService', function () {
+    describe('buildSingleSkillPrompt (via ClassificationPromptBuilder)', function () {
+        it('builds prompt for a single skill', function () {
+            // Arrange
+            $promptBuilder = $this->service->getPromptBuilder();
+            $skillName = 'imagegen';
+            $skill = [
+                'name' => 'imagegen',
+                'description' => 'Generate images using AI',
+                'keywords' => ['image', 'generate', 'ai'],
+            ];
+
+            // Act
+            $result = $promptBuilder->buildSingleSkillPrompt($skillName, $skill);
+
+            // Assert
+            expect($result)->toBeString()
+                ->toContain('imagegen')
+                ->toContain('Generate images using AI')
+                ->toContain('JSON')
+                ->toContain('sample_intent');
+        });
+
+        it('includes intents per skill count', function () {
+            // Arrange
+            $promptBuilder = $this->service->getPromptBuilder();
+            $skillName = 'test-skill';
+            $skill = [
+                'name' => 'test-skill',
+                'description' => 'A test skill',
+                'keywords' => ['test'],
+            ];
+
+            // Act
+            $result = $promptBuilder->buildSingleSkillPrompt($skillName, $skill);
+
+            // Assert - default is 5 intents per skill
+            expect($result)->toContain('5');
+        });
+
+        it('truncates long descriptions', function () {
+            // Arrange
+            $promptBuilder = $this->service->getPromptBuilder();
+            $skillName = 'test-skill';
+            $longDescription = str_repeat('This is a very long description. ', 50);
+            $skill = [
+                'name' => 'test-skill',
+                'description' => $longDescription,
+                'keywords' => ['test'],
+            ];
+
+            // Act
+            $result = $promptBuilder->buildSingleSkillPrompt($skillName, $skill);
+
+            // Assert - should not contain the full long description
+            expect($result)->toBeString()
+                ->and(strlen($result))->toBeLessThan(strlen($longDescription) + 500);
+        });
+
+        it('handles skill without keywords', function () {
+            // Arrange
+            $promptBuilder = $this->service->getPromptBuilder();
+            $skillName = 'minimal';
+            $skill = [
+                'name' => 'minimal',
+                'description' => 'Minimal skill',
+            ];
+
+            // Act
+            $result = $promptBuilder->buildSingleSkillPrompt($skillName, $skill);
+
+            // Assert
+            expect($result)->toBeString()
+                ->toContain('minimal')
+                ->toContain('Minimal skill');
+        });
+    });
+
+    describe('parseClassificationResponse', function () {
+        it('parses valid JSON array response', function () {
+            // Arrange
+            $skill = Skill::create([
+                'name' => 'imagegen',
+                'dir_name' => 'imagegen',
+                'path' => '/tmp/skills/imagegen',
+                'source_type' => 'core',
+                'description' => 'Generate images',
+                'checksum' => 'abc123',
+            ]);
+
+            $response = <<<'JSON'
+Here are the skill mappings:
+[
+  {
+    "sample_intent": "Generate an image of a sunset",
+    "keywords": ["generate", "image", "sunset"],
+    "confidence": 0.95,
+    "category": "creative"
+  },
+  {
+    "sample_intent": "Schedule a meeting for tomorrow",
+    "keywords": ["schedule", "meeting", "tomorrow"],
+    "confidence": 0.90,
+    "category": "scheduling"
+  }
+]
+JSON;
+
+            // Act
+            $result = $this->service->parseClassificationResponse($response, $skill->id);
+
+            // Assert
+            expect($result)->toBeArray()
+                ->toHaveCount(2)
+                ->and($result[0])->toHaveKeys(['sample_intent', 'keywords', 'skill_id', 'confidence', 'category'])
+                ->and($result[0]['skill_id'])->toBe($skill->id)
+                ->and($result[1]['skill_id'])->toBe($skill->id);
+        });
+
+        it('returns empty array for invalid JSON', function () {
+            // Arrange
+            $response = 'This is not valid JSON at all';
+
+            // Act
+            $result = $this->service->parseClassificationResponse($response);
+
+            // Assert
+            expect($result)->toBeArray()
+                ->toBeEmpty();
+        });
+
+        it('returns empty array for JSON without array', function () {
+            // Arrange
+            $response = '{"not": "an array"}';
+
+            // Act
+            $result = $this->service->parseClassificationResponse($response);
+
+            // Assert
+            expect($result)->toBeArray()
+                ->toBeEmpty();
+        });
+
+        it('filters entries missing required fields', function () {
+            // Arrange
+            $response = <<<'JSON'
+[
+  {
+    "sample_intent": "Valid entry",
+    "keywords": ["valid"],
+    "confidence": 0.9,
+    "category": "creative"
+  },
+  {
+    "sample_intent": "Also valid - keywords are optional",
+    "confidence": 0.8
+  },
+  {
+    "keywords": ["no intent"],
+    "confidence": 0.7
+  }
+]
+JSON;
+
+            // Act
+            $result = $this->service->parseClassificationResponse($response);
+
+            // Assert - only the third entry (missing sample_intent) should be filtered
+            expect($result)->toHaveCount(2)
+                ->and($result[0]['sample_intent'])->toBe('Valid entry')
+                ->and($result[1]['sample_intent'])->toBe('Also valid - keywords are optional')
+                ->and($result[1]['keywords'])->toBe([]);
+        });
+
+        it('applies default values for missing optional fields', function () {
+            // Arrange
+            $response = <<<'JSON'
+[
+  {
+    "sample_intent": "Minimal entry"
+  }
+]
+JSON;
+
+            // Act
+            $result = $this->service->parseClassificationResponse($response);
+
+            // Assert
+            expect($result)->toHaveCount(1)
+                ->and($result[0]['keywords'])->toBe([])
+                ->and($result[0]['confidence'])->toBe(0.8)
+                ->and($result[0]['category'])->toBe('unknown');
+        });
+    });
+
+    describe('storeMappings', function () {
+        it('stores mappings in database', function () {
+            // Arrange
+            $skill1 = Skill::create([
+                'name' => 'imagegen',
+                'dir_name' => 'imagegen',
+                'path' => '/tmp/skills/imagegen',
+                'source_type' => 'core',
+                'description' => 'Generate images',
+                'checksum' => 'abc123',
+            ]);
+
+            $skill2 = Skill::create([
+                'name' => 'schedule',
+                'dir_name' => 'schedule',
+                'path' => '/tmp/skills/schedule',
+                'source_type' => 'core',
+                'description' => 'Schedule tasks',
+                'checksum' => 'def456',
+            ]);
+
+            $mappings = [
+                [
+                    'sample_intent' => 'Generate an image',
+                    'keywords' => ['generate', 'image'],
+                    'skill_id' => $skill1->id,
+                    'confidence' => 0.95,
+                    'category' => 'creative',
+                ],
+                [
+                    'sample_intent' => 'Schedule a reminder',
+                    'keywords' => ['schedule', 'reminder'],
+                    'skill_id' => $skill2->id,
+                    'confidence' => 0.90,
+                    'category' => 'scheduling',
+                ],
+            ];
+
+            // Act
+            $stored = $this->service->storeMappings($mappings);
+
+            // Assert
+            expect($stored)->toBe(2)
+                ->and(SkillMatch::count())->toBe(2);
+        });
+
+        it('stores mapping with correct data', function () {
+            // Arrange
+            $skill = Skill::create([
+                'name' => 'agent-browser',
+                'dir_name' => 'agent-browser',
+                'path' => '/tmp/skills/agent-browser',
+                'source_type' => 'core',
+                'description' => 'Browse websites',
+                'checksum' => 'abc123',
+            ]);
+
+            $mappings = [
+                [
+                    'sample_intent' => 'Open a website',
+                    'keywords' => ['open', 'website', 'browser'],
+                    'skill_id' => $skill->id,
+                    'confidence' => 0.92,
+                    'category' => 'automation',
+                ],
+            ];
+
+            // Act
+            $this->service->storeMappings($mappings);
+
+            // Assert
+            $match = SkillMatch::first();
+            expect($match)->not->toBeNull()
+                ->and($match->skill_id)->toBe($skill->id)
+                ->and($match->skill->name)->toBe('agent-browser')
+                ->and($match->confidence_score)->toBe(0.92)
+                ->and($match->intent_category)->toBe('automation')
+                ->and($match->intent_keywords)->toBe(['open', 'website', 'browser']);
+        });
+
+        it('handles empty mappings array', function () {
+            // Arrange
+            $mappings = [];
+
+            // Act
+            $stored = $this->service->storeMappings($mappings);
+
+            // Assert
+            expect($stored)->toBe(0)
+                ->and(SkillMatch::count())->toBe(0);
+        });
+
+        it('skips mappings without skill_id', function () {
+            // Arrange
+            $mappings = [
+                [
+                    'sample_intent' => 'No skill ID',
+                    'keywords' => ['test'],
+                    'confidence' => 0.9,
+                    'category' => 'test',
+                ],
+            ];
+
+            // Act
+            $stored = $this->service->storeMappings($mappings);
+
+            // Assert
+            expect($stored)->toBe(0)
+                ->and(SkillMatch::count())->toBe(0);
+        });
+    });
+
+    describe('getClassificationModel', function () {
+        it('returns fast model for known providers', function () {
+            // Act & Assert
+            expect($this->service->getClassificationModel('groq'))->toBe('llama-3.3-70b-versatile')
+                ->and($this->service->getClassificationModel('openai'))->toBe('gpt-4o-mini')
+                ->and($this->service->getClassificationModel('anthropic'))->toBe('claude-3-5-haiku-20241022')
+                ->and($this->service->getClassificationModel('gemini'))->toBe('gemini-2.0-flash');
+        });
+
+        it('returns default model for unknown provider', function () {
+            // Arrange - mock settings to return a default
+            $defaultModel = $this->settings->getDefaultModel('unknown-provider');
+
+            // Act
+            $result = $this->service->getClassificationModel('unknown-provider');
+
+            // Assert - should fall back to settings default
+            expect($result)->toBeString();
+        });
+    });
+
+    describe('setIntentsPerSkill', function () {
+        it('sets the intents per skill count', function () {
+            // Act
+            $result = $this->service->setIntentsPerSkill(10);
+
+            // Assert - should return self for chaining
+            expect($result)->toBeInstanceOf(SkillClassificationService::class);
+        });
+    });
+
+    describe('getCacheStatistics', function () {
+        it('returns cache statistics', function () {
+            // Arrange - add some test data
+            $skill = Skill::create([
+                'name' => 'test-skill',
+                'dir_name' => 'test-skill',
+                'path' => '/tmp/skills/test-skill',
+                'source_type' => 'core',
+                'description' => 'Test skill',
+                'checksum' => 'abc123',
+                'classification_status' => Skill::STATUS_CLASSIFIED,
+            ]);
+
+            SkillMatch::storeMatch(
+                keywords: ['test', 'keywords'],
+                skillId: $skill->id,
+                confidence: 0.9,
+                category: 'test',
+                sampleMessage: 'Test message'
+            );
+
+            // Act
+            $result = $this->service->getCacheStatistics();
+
+            // Assert
+            expect($result)->toBeArray()
+                ->toHaveKeys(['total_entries', 'total_hits', 'skills_covered', 'skills_pending', 'skills_classified', 'skills_failed'])
+                ->and($result['total_entries'])->toBeGreaterThanOrEqual(1);
+        });
+
+        it('returns zeros for empty cache', function () {
+            // Arrange - ensure cache is empty
+            SkillMatch::query()->delete();
+            Skill::query()->delete();
+
+            // Act
+            $result = $this->service->getCacheStatistics();
+
+            // Assert
+            expect($result)->toBeArray()
+                ->and($result['total_entries'])->toBe(0)
+                ->and($result['total_hits'])->toBe(0);
+        });
+    });
+
+    describe('classifyAllSkills', function () {
+        it('returns error result when no skills found', function () {
+            // Arrange - mock empty skill index
+            $mockSkillService = Mockery::mock(SkillSearchService::class);
+            $mockSkillService->shouldReceive('indexSkills')
+                ->once()
+                ->andReturn([]);
+
+            $service = new SkillClassificationService($this->settings, $mockSkillService);
+
+            // Act
+            $result = $service->classifyAllSkills();
+
+            // Assert
+            expect($result)->toBeArray()
+                ->toHaveKeys(['skills_processed', 'skills_skipped', 'mappings_generated', 'mappings_stored', 'errors'])
+                ->and($result['skills_processed'])->toBe(0)
+                ->and($result['mappings_generated'])->toBe(0)
+                ->and($result['errors'])->toContain('No skills found');
+        });
+
+        it('clears existing mappings when clearExisting is true', function () {
+            // Arrange - add existing skill and mapping
+            $skill = Skill::create([
+                'name' => 'existing-skill',
+                'dir_name' => 'existing-skill',
+                'path' => '/tmp/skills/existing-skill',
+                'source_type' => 'core',
+                'description' => 'Existing skill',
+                'checksum' => 'abc123',
+                'classification_status' => Skill::STATUS_CLASSIFIED,
+            ]);
+
+            SkillMatch::storeMatch(
+                keywords: ['existing'],
+                skillId: $skill->id,
+                confidence: 0.8
+            );
+
+            expect(SkillMatch::count())->toBe(1);
+
+            // Mock skill service to return empty to avoid LLM call
+            $mockSkillService = Mockery::mock(SkillSearchService::class);
+            $mockSkillService->shouldReceive('indexSkills')
+                ->once()
+                ->andReturn([]);
+
+            $service = new SkillClassificationService($this->settings, $mockSkillService);
+
+            // Act
+            $service->classifyAllSkills(clearExisting: true);
+
+            // Assert - cache should be cleared
+            expect(SkillMatch::count())->toBe(0);
+        });
+
+        it('resets classification status when clearExisting is true', function () {
+            // Arrange
+            $skill = Skill::create([
+                'name' => 'classified-skill',
+                'dir_name' => 'classified-skill',
+                'path' => '/tmp/skills/classified-skill',
+                'source_type' => 'core',
+                'description' => 'Classified skill',
+                'checksum' => 'abc123',
+                'classification_status' => Skill::STATUS_CLASSIFIED,
+            ]);
+
+            // Mock skill service to return empty
+            $mockSkillService = Mockery::mock(SkillSearchService::class);
+            $mockSkillService->shouldReceive('indexSkills')
+                ->once()
+                ->andReturn([]);
+
+            $service = new SkillClassificationService($this->settings, $mockSkillService);
+
+            // Act
+            $service->classifyAllSkills(clearExisting: true);
+
+            // Assert
+            $skill->refresh();
+            expect($skill->classification_status)->toBe(Skill::STATUS_PENDING);
+        });
+
+        it('skips already classified skills with same checksum', function () {
+            // Arrange - create a temp skill directory so checksum can be calculated
+            $tempDir = sys_get_temp_dir().'/skill_skip_test_'.uniqid();
+            mkdir($tempDir);
+            file_put_contents($tempDir.'/SKILL.md', '---\nname: classified-skill\n---\nTest skill content');
+
+            // Calculate the actual checksum
+            $actualChecksum = Skill::calculateChecksum($tempDir);
+
+            // Create a classified skill with the same checksum
+            Skill::create([
+                'name' => 'classified-skill',
+                'dir_name' => 'classified-skill',
+                'path' => $tempDir,
+                'source_type' => 'core',
+                'description' => 'Classified skill',
+                'checksum' => $actualChecksum,
+                'classification_status' => Skill::STATUS_CLASSIFIED,
+                'intents_count' => 5,
+            ]);
+
+            // Mock skill service to return the same skill
+            $mockSkillService = Mockery::mock(SkillSearchService::class);
+            $mockSkillService->shouldReceive('indexSkills')
+                ->once()
+                ->andReturn([
+                    'classified-skill' => [
+                        'name' => 'classified-skill',
+                        'dir_name' => 'classified-skill',
+                        'path' => $tempDir,
+                        'directory' => $tempDir,
+                        'source_type' => 'core',
+                        'description' => 'Classified skill',
+                        'keywords' => [],
+                    ],
+                ]);
+
+            $service = new SkillClassificationService($this->settings, $mockSkillService);
+
+            // Act
+            $result = $service->classifyAllSkills();
+
+            // Assert - skill should be skipped (no LLM call)
+            expect($result['skills_processed'])->toBe(0)
+                ->and($result['skills_skipped'])->toBe(1);
+
+            // Cleanup
+            unlink($tempDir.'/SKILL.md');
+            rmdir($tempDir);
+        });
+    });
+
+    describe('buildSkillDetails (via ClassificationPromptBuilder)', function () {
+        it('builds details from mappings', function () {
+            // Arrange
+            $promptBuilder = $this->service->getPromptBuilder();
+            $mappings = [
+                [
+                    'sample_intent' => 'Generate an image',
+                    'keywords' => ['generate', 'image'],
+                ],
+                [
+                    'sample_intent' => 'Create a picture',
+                    'keywords' => ['create', 'picture'],
+                ],
+            ];
+
+            // Act
+            $result = $promptBuilder->buildSkillDetails($mappings);
+
+            // Assert
+            expect($result)->toBeArray()
+                ->toHaveKeys(['intents', 'keywords'])
+                ->and($result['intents'])->toHaveCount(2)
+                ->and($result['keywords'])->toHaveCount(4);
+        });
+    });
+});

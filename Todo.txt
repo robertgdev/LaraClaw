@@ -1,0 +1,10 @@
+- Code quality
+  - clean up phpstan warnings
+  - refactor long methods
+
+- Add more channels (whatsapp, slack, etc.)
+- Add ACP support
+- Improve memory handling
+- Improve file handling
+- Figure out unified cron/scheduler setup
+

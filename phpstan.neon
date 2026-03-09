@@ -1,0 +1,28 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+    - vendor/thecodingmachine/phpstan-safe-rule/phpstan-safe-rule.neon
+
+parameters:
+    tmpDir: .phpstan/cache
+    parallel:       
+        jobSize: 20
+        maximumNumberOfProcesses: 12 
+        minimumNumberOfJobsPerProcess: 3
+
+    paths:
+        - app/
+
+    # Level 9 is the highest level
+    level: 6
+
+    ignoreErrors:
+        # Ignore missing generic types for Eloquent relationships since TDeclaringModel is not covariant
+        - '#Method .+::(agent|agents|conversations|fromAgent|leader|ledTeams|messages|sentMessages|suggestedAgent|team|teams|teamsViaJson)\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\(HasOne|HasMany|HasOneThrough|BelongsTo|MorphTo) does not specify its types#'
+        - '#Method .+::(scope.*)\(\)#'
+
+    treatPhpDocTypesAsCertain: false
+
+    excludePaths:
+
+    universalObjectCratesClasses:
