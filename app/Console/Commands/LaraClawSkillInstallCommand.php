@@ -7,12 +7,14 @@ use App\Services\SkillAutoDiscoveryService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
-
 use function Laravel\Prompts\error;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\select;
 use function Laravel\Prompts\text;
 use function Laravel\Prompts\warning;
+use function Safe\preg_match;
+use function Safe\preg_replace;
+use function Safe\preg_split;
 
 /**
  * Interactive skill search and install command.
@@ -163,6 +165,14 @@ class LaraClawSkillInstallCommand extends Command
 
     /**
      * Run `npx skills find` and parse the output.
+     *
+     * @return list<array{
+     *      name: string,
+     *      description: string,
+     *      owner: string,
+     *      repo: string,
+     *      installs: int
+     *  }>
      */
     protected function runSkillsFind(string $searchTerm): array
     {
@@ -185,6 +195,14 @@ class LaraClawSkillInstallCommand extends Command
 
     /**
      * Parse the text output from `npx skills find`.
+     *
+     * @return list<array{
+     *     name: string,
+     *     description: string,
+     *     owner: string,
+     *     repo: string,
+     *     installs: int
+     * }>
      */
     protected function parseSkillsFindOutput(string $output): array
     {
