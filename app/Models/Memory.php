@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\DTOs\MemoryStatsDTO;
 use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
 use Illuminate\Database\Eloquent\Model;
@@ -162,5 +163,19 @@ class Memory extends Model
         if ($newImportance >= 0.05) {
             $this->update(['importance' => $newImportance]);
         }
+    }
+
+    public static function statsForSender(string $senderId, ChannelEnum $channel): MemoryStatsDTO
+    {
+        return static::forSender($senderId, $channel)
+            ->selectRaw('
+                COUNT(*) as total,
+                AVG(importance) as avgImportance,
+                SUM(CASE WHEN last_accessed_at < ? THEN 1 ELSE 0 END) as oldCount,
+                SUM(CASE WHEN importance < 0.1 AND access_count = 0 THEN 1 ELSE 0 END) as pruneCandidates
+            ', [now()->subDays(7)])
+            ->get()
+            ->mapInto(MemoryStatsDTO::class)
+            ->first();
     }
 }

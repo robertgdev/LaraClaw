@@ -87,29 +87,29 @@ class LaraClawMemoryConsolidateCommand extends Command
     /**
      * Consolidate memories for all users.
      */
-    private function consolidateAll(MemoryEngineService $memory, bool $dryRun): int
+    private function consolidateAll(MemoryEngineService $memoryEngineService, bool $dryRun): int
     {
         $this->info('Consolidating memories for all users...');
 
         // Get unique sender_id + channel combinations
-        $users = Memory::query()
+        $memories = Memory::query()
             ->select('sender_id', 'channel')
             ->distinct()
             ->get();
 
-        if ($users->isEmpty()) {
+        if ($memories->isEmpty()) {
             $this->info('No memories found to consolidate.');
 
             return 0;
         }
 
-        $this->info("Found {$users->count()} unique users with memories.");
+        $this->info("Found {$memories->count()} unique users with memories.");
 
         if ($dryRun) {
             $this->warn('Dry run mode - no changes will be made');
 
-            foreach ($users as $user) {
-                $this->line("  - Sender: {$user->sender_id}, Channel: {$user->channel}");
+            foreach ($memories as $user) {
+                $this->line("  - Sender: {$user->sender_id}, Channel: {$user->channel->value}");
             }
 
             return 0;
@@ -121,19 +121,17 @@ class LaraClawMemoryConsolidateCommand extends Command
             'merged' => 0,
         ];
 
-        $bar = $this->output->createProgressBar($users->count());
+        $bar = $this->output->createProgressBar($memories->count());
         $bar->start();
 
-        foreach ($users as $user) {
+        foreach ($memories as $memory) {
             try {
-                $channelEnum = ChannelEnum::from($user->channel);
-                $result = $memory->consolidate($user->sender_id, $channelEnum);
-
+                $result = $memoryEngineService->consolidate($memory->sender_id, $memory->channel);
                 $totals['decayed'] += $result['decayed'];
                 $totals['pruned'] += $result['pruned'];
                 $totals['merged'] += $result['merged'];
             } catch (\Exception $e) {
-                $this->error("Error consolidating for {$user->sender_id}: {$e->getMessage()}");
+                $this->error("Error consolidating for {$memory->sender_id}: {$e->getMessage()}");
             }
 
             $bar->advance();
@@ -155,20 +153,13 @@ class LaraClawMemoryConsolidateCommand extends Command
      */
     private function showStats(string $senderId, ChannelEnum $channel): void
     {
-        $stats = Memory::forSender($senderId, $channel)
-            ->selectRaw('
-                COUNT(*) as total,
-                AVG(importance) as avg_importance,
-                SUM(CASE WHEN last_accessed_at < ? THEN 1 ELSE 0 END) as old_count,
-                SUM(CASE WHEN importance < 0.1 AND access_count = 0 THEN 1 ELSE 0 END) as prune_candidates
-            ', [now()->subDays(7)])
-            ->first();
+        $stats = Memory::statsForSender($senderId, $channel);
 
         $this->newLine();
         $this->line('Current memory statistics:');
         $this->line("  - Total memories: {$stats->total}");
-        $this->line('  - Average importance: '.number_format($stats->avg_importance, 2));
-        $this->line("  - Not accessed in 7+ days: {$stats->old_count}");
-        $this->line("  - Prune candidates (low importance, unaccessed): {$stats->prune_candidates}");
+        $this->line('  - Average importance: '.number_format($stats->avgImportance, 2));
+        $this->line("  - Not accessed in 7+ days: {$stats->oldCount}");
+        $this->line("  - Prune candidates (low importance, unaccessed): {$stats->pruneCandidates}");
     }
 }
