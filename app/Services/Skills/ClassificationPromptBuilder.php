@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\TypedCollections\IntentMappingDTOCollection;
 use Illuminate\Support\Str;
 
 /**
@@ -74,14 +75,14 @@ PROMPT;
      * @param  array  $mappings  The mappings for this skill
      * @return array{intents: array<string>, keywords: array<string>}
      */
-    public function buildSkillDetails(array $mappings): array
+    public function buildSkillDetails(IntentMappingDTOCollection $mappings): array
     {
         $intents = [];
         $keywords = [];
 
         foreach ($mappings as $mapping) {
-            $intents[] = $mapping['sample_intent'];
-            $keywords = array_unique(array_merge($keywords, $mapping['keywords'] ?? []));
+            $intents[] = $mapping->sampleIntent;
+            $keywords = array_unique(array_merge($keywords, $mapping->keywords ?? []));
         }
 
         return [

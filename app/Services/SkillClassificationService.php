@@ -9,6 +9,7 @@ use App\Services\Skills\ApiErrorClassifier;
 use App\Services\Skills\ClassificationMappingRepository;
 use App\Services\Skills\ClassificationPromptBuilder;
 use App\Services\Skills\ClassificationResponseParser;
+use App\TypedCollections\IntentMappingDTOCollection;
 use Prism\Prism\Facades\Prism;
 
 /**
@@ -81,7 +82,7 @@ class SkillClassificationService
     public function classifyAllSkills(bool $clearExisting = false, ?callable $progressCallback = null): array
     {
         $errors = [];
-        $allMappings = [];
+        $allMappings = new IntentMappingDTOCollection();
         $skillsDetails = [];
         $skillsProcessed = 0;
         $skillsSkipped = 0;
@@ -113,10 +114,7 @@ class SkillClassificationService
         }
 
         // 3. Get skills that need classification
-        $skillsToClassify = Skill::active()
-            ->needsClassification()
-            ->get();
-
+        $skillsToClassify = Skill::active()->needsClassification()->get();
         $totalSkills = $skillsToClassify->count();
 
         MultiLogger::info('Starting skill classification', [
@@ -148,9 +146,9 @@ class SkillClassificationService
                 // Parse response
                 $mappings = $this->responseParser->parse($response, $skill->id);
 
-                if (! empty($mappings)) {
-                    $mappingsCount = count($mappings);
-                    $allMappings = array_merge($allMappings, $mappings);
+                if ($mappings->isNotEmpty()) {
+                    $mappingsCount = $mappings->count();
+                    $allMappings = $allMappings->merge($mappings);
                     $skillsDetails[$skill->name] = $this->promptBuilder->buildSkillDetails($mappings);
                 }
 
@@ -166,6 +164,7 @@ class SkillClassificationService
                     'skill' => $skill->name,
                     'error' => $errorMsg,
                     'error_type' => $errorType,
+                    'trace' => $e->getTrace(),
                 ]);
 
                 $skill->markFailed($errorType);
@@ -180,6 +179,7 @@ class SkillClassificationService
         }
 
         // 5. Count skipped skills (already classified with same checksum)
+        // FIXME: only skip if it actually has skills
         $skillsSkipped = Skill::active()
             ->where('classification_status', Skill::STATUS_CLASSIFIED)
             ->count();
@@ -253,9 +253,9 @@ class SkillClassificationService
      *
      * @param  string  $response  The raw LLM response
      * @param  int|null  $skillId  The skill ID to associate with mappings
-     * @return array Array of parsed mappings
+     * @return IntentMappingDTOCollection Collection of parsed mappings
      */
-    public function parseClassificationResponse(string $response, ?int $skillId = null): array
+    public function parseClassificationResponse(string $response, ?int $skillId = null): IntentMappingDTOCollection
     {
         return $this->responseParser->parse($response, $skillId);
     }

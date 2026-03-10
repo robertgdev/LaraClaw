@@ -5,10 +5,10 @@ namespace App\Console\Commands;
 use App\Models\Skill;
 use App\Services\SkillClassificationService;
 use Illuminate\Console\Command;
-
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
+use function Safe\json_encode;
 
 class LaraClawSkillsCommand extends Command
 {

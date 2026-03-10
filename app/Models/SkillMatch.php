@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\DTOs\IntentClassificationDTO;
+use App\DTOs\IntentMappingDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
 use App\Services\Skills\SignatureGenerator;
 use App\Services\Skills\SkillMatchRepository;
@@ -256,23 +257,19 @@ class SkillMatch extends Model
      * Store a new cache entry or update existing.
      */
     public static function storeMatch(
-        array $keywords,
-        int $skillId,
-        float $confidence,
-        ?string $category = null,
+        IntentMappingDTO $intentMapping,
         ?array $entities = null,
         ?string $agent = null,
-        ?string $sampleMessage = null,
         ?array $metadata = null
     ): self {
         return static::repository()->storeMatch(
-            keywords: $keywords,
-            skillId: $skillId,
-            confidence: $confidence,
-            category: $category,
+            keywords: $intentMapping->keywords,
+            skillId: $intentMapping->skillId,
+            confidence: $intentMapping->confidence,
+            category: $intentMapping->category,
             entities: $entities,
             agent: $agent,
-            sampleMessage: $sampleMessage,
+            sampleMessage: $intentMapping->sampleIntent,
             metadata: $metadata
         );
     }
@@ -282,6 +279,7 @@ class SkillMatch extends Model
      *
      * @throws \InvalidArgumentException If skill not found
      */
+    // FIXME: convert to DTO
     public static function storeMatchBySkillName(
         array $keywords,
         string $skillName,

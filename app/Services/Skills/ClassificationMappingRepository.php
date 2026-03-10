@@ -6,6 +6,7 @@ namespace App\Services\Skills;
 
 use App\Logging\MultiLogger;
 use App\Models\SkillMatch;
+use App\TypedCollections\IntentMappingDTOCollection;
 
 /**
  * Repository for storing and querying skill classification mappings.
@@ -18,21 +19,18 @@ class ClassificationMappingRepository
     /**
      * Store parsed mappings in the database.
      * Clears existing pre-classification mappings for each skill before storing new ones.
-     *
-     * @param  array  $mappings  Array of parsed mappings
-     * @return int Number of mappings stored
      */
-    public function storeMappings(array $mappings): int
+    public function storeMappings(IntentMappingDTOCollection $mappings): int
     {
         $stored = 0;
 
         // Group mappings by skill_id
         $bySkill = [];
         foreach ($mappings as $mapping) {
-            if (empty($mapping['skill_id'])) {
+            if (! $mapping->skillId) {
                 continue;
             }
-            $bySkill[$mapping['skill_id']][] = $mapping;
+            $bySkill[$mapping->skillId][] = $mapping;
         }
 
         // Clear existing mappings for each skill and store new ones
@@ -45,17 +43,11 @@ class ClassificationMappingRepository
             // Store new mappings
             foreach ($skillMappings as $mapping) {
                 try {
-                    SkillMatch::storeMatch(
-                        keywords: $mapping['keywords'],
-                        skillId: $mapping['skill_id'],
-                        confidence: $mapping['confidence'],
-                        category: $mapping['category'],
-                        sampleMessage: $mapping['sample_intent'],
-                        metadata: [
-                            'source' => 'preclassification',
-                            'generated_at' => now()->toIso8601String(),
-                        ]
-                    );
+                    $metaData = [
+                        'source' => 'preclassification', // FIXME: convert to enum
+                        'generated_at' => now()->toIso8601String(),
+                    ];
+                    SkillMatch::storeMatch($mapping, metadata: $metaData);
                     $stored++;
                 } catch (\Exception $e) {
                     MultiLogger::warning('Failed to store skill mapping', [
