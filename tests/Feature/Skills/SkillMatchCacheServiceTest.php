@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\IntentMappingDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
@@ -27,11 +28,14 @@ describe('SkillMatchCache', function () {
                 'keywords' => ['test', 'skill'],
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new IntentMappingDTO(
+                sampleIntent: 'Test query',
                 keywords: ['test', 'query'],
                 skillId: $skill->id,
                 confidence: 0.9,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             $result = $this->cache->findMatch(['test', 'query']);
 
@@ -50,11 +54,14 @@ describe('SkillMatchCache', function () {
                 'keywords' => ['low'],
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new IntentMappingDTO(
+                sampleIntent: 'Unrelated',
                 keywords: ['unrelated'],
                 skillId: $skill->id,
                 confidence: 0.3,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             $result = $this->cache->findMatch(['completely', 'different']);
 
@@ -126,11 +133,14 @@ describe('SkillMatchCache', function () {
                 'has_assets' => false,
             ]);
 
-            $match = SkillMatch::storeMatch(
+            $mapping = new IntentMappingDTO(
+                sampleIntent: 'Cached query',
                 keywords: ['cached', 'query'],
                 skillId: $skill->id,
                 confidence: 0.85,
+                category: 'test',
             );
+            $match = SkillMatch::storeMatch($mapping);
 
             $match->refresh();
             $initialHits = $match->hit_count;
@@ -167,8 +177,22 @@ describe('SkillMatchCache', function () {
                 'checksum' => 'mno345',
             ]);
 
-            SkillMatch::storeMatch(keywords: ['a'], skillId: $skill->id, confidence: 0.9);
-            SkillMatch::storeMatch(keywords: ['b'], skillId: $skill->id, confidence: 0.8);
+            $mapping1 = new IntentMappingDTO(
+                sampleIntent: 'A query',
+                keywords: ['a'],
+                skillId: $skill->id,
+                confidence: 0.9,
+                category: 'test',
+            );
+            $mapping2 = new IntentMappingDTO(
+                sampleIntent: 'B query',
+                keywords: ['b'],
+                skillId: $skill->id,
+                confidence: 0.8,
+                category: 'test',
+            );
+            SkillMatch::storeMatch($mapping1);
+            SkillMatch::storeMatch($mapping2);
 
             expect(SkillMatch::count())->toBe(2);
 

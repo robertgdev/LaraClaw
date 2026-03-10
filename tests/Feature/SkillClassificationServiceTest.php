@@ -139,14 +139,14 @@ JSON;
             $result = $this->service->parseClassificationResponse($response, $skill->id);
 
             // Assert
-            expect($result)->toBeArray()
+            expect($result)->toBeInstanceOf(\App\TypedCollections\IntentMappingDTOCollection::class)
                 ->toHaveCount(2)
-                ->and($result[0])->toHaveKeys(['sample_intent', 'keywords', 'skill_id', 'confidence', 'category'])
-                ->and($result[0]['skill_id'])->toBe($skill->id)
-                ->and($result[1]['skill_id'])->toBe($skill->id);
+                ->and($result[0]->sampleIntent)->toBe('Generate an image of a sunset')
+                ->and($result[0]->skillId)->toBe($skill->id)
+                ->and($result[1]->skillId)->toBe($skill->id);
         });
 
-        it('returns empty array for invalid JSON', function () {
+        it('returns empty collection for invalid JSON', function () {
             // Arrange
             $response = 'This is not valid JSON at all';
 
@@ -154,11 +154,11 @@ JSON;
             $result = $this->service->parseClassificationResponse($response);
 
             // Assert
-            expect($result)->toBeArray()
+            expect($result)->toBeInstanceOf(\App\TypedCollections\IntentMappingDTOCollection::class)
                 ->toBeEmpty();
         });
 
-        it('returns empty array for JSON without array', function () {
+        it('returns empty collection for JSON without array', function () {
             // Arrange
             $response = '{"not": "an array"}';
 
@@ -166,7 +166,7 @@ JSON;
             $result = $this->service->parseClassificationResponse($response);
 
             // Assert
-            expect($result)->toBeArray()
+            expect($result)->toBeInstanceOf(\App\TypedCollections\IntentMappingDTOCollection::class)
                 ->toBeEmpty();
         });
 
@@ -196,9 +196,9 @@ JSON;
 
             // Assert - only the third entry (missing sample_intent) should be filtered
             expect($result)->toHaveCount(2)
-                ->and($result[0]['sample_intent'])->toBe('Valid entry')
-                ->and($result[1]['sample_intent'])->toBe('Also valid - keywords are optional')
-                ->and($result[1]['keywords'])->toBe([]);
+                ->and($result[0]->sampleIntent)->toBe('Valid entry')
+                ->and($result[1]->sampleIntent)->toBe('Also valid - keywords are optional')
+                ->and($result[1]->keywords)->toBe([]);
         });
 
         it('applies default values for missing optional fields', function () {
@@ -216,9 +216,9 @@ JSON;
 
             // Assert
             expect($result)->toHaveCount(1)
-                ->and($result[0]['keywords'])->toBe([])
-                ->and($result[0]['confidence'])->toBe(0.8)
-                ->and($result[0]['category'])->toBe('unknown');
+                ->and($result[0]->keywords)->toBe([])
+                ->and($result[0]->confidence)->toBe(0.8)
+                ->and($result[0]->category)->toBe('unknown');
         });
     });
 
@@ -243,22 +243,22 @@ JSON;
                 'checksum' => 'def456',
             ]);
 
-            $mappings = [
-                [
-                    'sample_intent' => 'Generate an image',
-                    'keywords' => ['generate', 'image'],
-                    'skill_id' => $skill1->id,
-                    'confidence' => 0.95,
-                    'category' => 'creative',
-                ],
-                [
-                    'sample_intent' => 'Schedule a reminder',
-                    'keywords' => ['schedule', 'reminder'],
-                    'skill_id' => $skill2->id,
-                    'confidence' => 0.90,
-                    'category' => 'scheduling',
-                ],
-            ];
+            $mappings = new \App\TypedCollections\IntentMappingDTOCollection([
+                new \App\DTOs\IntentMappingDTO(
+                    sampleIntent: 'Generate an image',
+                    keywords: ['generate', 'image'],
+                    skillId: $skill1->id,
+                    confidence: 0.95,
+                    category: 'creative',
+                ),
+                new \App\DTOs\IntentMappingDTO(
+                    sampleIntent: 'Schedule a reminder',
+                    keywords: ['schedule', 'reminder'],
+                    skillId: $skill2->id,
+                    confidence: 0.90,
+                    category: 'scheduling',
+                ),
+            ]);
 
             // Act
             $stored = $this->service->storeMappings($mappings);
@@ -279,15 +279,15 @@ JSON;
                 'checksum' => 'abc123',
             ]);
 
-            $mappings = [
-                [
-                    'sample_intent' => 'Open a website',
-                    'keywords' => ['open', 'website', 'browser'],
-                    'skill_id' => $skill->id,
-                    'confidence' => 0.92,
-                    'category' => 'automation',
-                ],
-            ];
+            $mappings = new \App\TypedCollections\IntentMappingDTOCollection([
+                new \App\DTOs\IntentMappingDTO(
+                    sampleIntent: 'Open a website',
+                    keywords: ['open', 'website', 'browser'],
+                    skillId: $skill->id,
+                    confidence: 0.92,
+                    category: 'automation',
+                ),
+            ]);
 
             // Act
             $this->service->storeMappings($mappings);
@@ -302,9 +302,9 @@ JSON;
                 ->and($match->intent_keywords)->toBe(['open', 'website', 'browser']);
         });
 
-        it('handles empty mappings array', function () {
+        it('handles empty mappings collection', function () {
             // Arrange
-            $mappings = [];
+            $mappings = new \App\TypedCollections\IntentMappingDTOCollection([]);
 
             // Act
             $stored = $this->service->storeMappings($mappings);
@@ -316,14 +316,15 @@ JSON;
 
         it('skips mappings without skill_id', function () {
             // Arrange
-            $mappings = [
-                [
-                    'sample_intent' => 'No skill ID',
-                    'keywords' => ['test'],
-                    'confidence' => 0.9,
-                    'category' => 'test',
-                ],
-            ];
+            $mappings = new \App\TypedCollections\IntentMappingDTOCollection([
+                new \App\DTOs\IntentMappingDTO(
+                    sampleIntent: 'No skill ID',
+                    keywords: ['test'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'test',
+                ),
+            ]);
 
             // Act
             $stored = $this->service->storeMappings($mappings);
@@ -378,13 +379,14 @@ JSON;
                 'classification_status' => Skill::STATUS_CLASSIFIED,
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Test message',
                 keywords: ['test', 'keywords'],
                 skillId: $skill->id,
                 confidence: 0.9,
                 category: 'test',
-                sampleMessage: 'Test message'
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act
             $result = $this->service->getCacheStatistics();
@@ -443,11 +445,14 @@ JSON;
                 'classification_status' => Skill::STATUS_CLASSIFIED,
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Existing mapping',
                 keywords: ['existing'],
                 skillId: $skill->id,
-                confidence: 0.8
+                confidence: 0.8,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             expect(SkillMatch::count())->toBe(1);
 
@@ -550,16 +555,22 @@ JSON;
         it('builds details from mappings', function () {
             // Arrange
             $promptBuilder = $this->service->getPromptBuilder();
-            $mappings = [
-                [
-                    'sample_intent' => 'Generate an image',
-                    'keywords' => ['generate', 'image'],
-                ],
-                [
-                    'sample_intent' => 'Create a picture',
-                    'keywords' => ['create', 'picture'],
-                ],
-            ];
+            $mappings = new \App\TypedCollections\IntentMappingDTOCollection([
+                new \App\DTOs\IntentMappingDTO(
+                    sampleIntent: 'Generate an image',
+                    keywords: ['generate', 'image'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'creative',
+                ),
+                new \App\DTOs\IntentMappingDTO(
+                    sampleIntent: 'Create a picture',
+                    keywords: ['create', 'picture'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'creative',
+                ),
+            ]);
 
             // Act
             $result = $promptBuilder->buildSkillDetails($mappings);

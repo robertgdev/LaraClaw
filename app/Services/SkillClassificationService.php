@@ -264,10 +264,10 @@ class SkillClassificationService
      * Store the parsed mappings in the database.
      * Delegates to ClassificationMappingRepository.
      *
-     * @param  array  $mappings  Array of parsed mappings
+     * @param  IntentMappingDTOCollection  $mappings  Collection of parsed mappings
      * @return int Number of mappings stored
      */
-    public function storeMappings(array $mappings): int
+    public function storeMappings(IntentMappingDTOCollection $mappings): int
     {
         return $this->mappingRepository->storeMappings($mappings);
     }

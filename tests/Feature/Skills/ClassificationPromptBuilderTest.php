@@ -1,6 +1,8 @@
 <?php
 
+use App\DTOs\IntentMappingDTO;
 use App\Services\Skills\ClassificationPromptBuilder;
+use App\TypedCollections\IntentMappingDTOCollection;
 
 beforeEach(function () {
     $this->builder = new ClassificationPromptBuilder;
@@ -73,10 +75,22 @@ describe('ClassificationPromptBuilder', function () {
 
     describe('buildSkillDetails', function () {
         it('extracts intents and keywords from mappings', function () {
-            $mappings = [
-                ['sample_intent' => 'Generate an image', 'keywords' => ['generate', 'image']],
-                ['sample_intent' => 'Create a picture', 'keywords' => ['create', 'picture']],
-            ];
+            $mappings = new IntentMappingDTOCollection([
+                new IntentMappingDTO(
+                    sampleIntent: 'Generate an image',
+                    keywords: ['generate', 'image'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'creative',
+                ),
+                new IntentMappingDTO(
+                    sampleIntent: 'Create a picture',
+                    keywords: ['create', 'picture'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'creative',
+                ),
+            ]);
 
             $result = $this->builder->buildSkillDetails($mappings);
 
@@ -87,10 +101,22 @@ describe('ClassificationPromptBuilder', function () {
         });
 
         it('deduplicates keywords', function () {
-            $mappings = [
-                ['sample_intent' => 'Intent 1', 'keywords' => ['shared', 'unique1']],
-                ['sample_intent' => 'Intent 2', 'keywords' => ['shared', 'unique2']],
-            ];
+            $mappings = new IntentMappingDTOCollection([
+                new IntentMappingDTO(
+                    sampleIntent: 'Intent 1',
+                    keywords: ['shared', 'unique1'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'test',
+                ),
+                new IntentMappingDTO(
+                    sampleIntent: 'Intent 2',
+                    keywords: ['shared', 'unique2'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'test',
+                ),
+            ]);
 
             $result = $this->builder->buildSkillDetails($mappings);
 
@@ -98,7 +124,7 @@ describe('ClassificationPromptBuilder', function () {
         });
 
         it('handles empty mappings', function () {
-            $result = $this->builder->buildSkillDetails([]);
+            $result = $this->builder->buildSkillDetails(new IntentMappingDTOCollection([]));
 
             expect($result['intents'])->toBeEmpty()
                 ->and($result['keywords'])->toBeEmpty();

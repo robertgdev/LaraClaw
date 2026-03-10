@@ -525,13 +525,14 @@ MD;
                 'classification_status' => Skill::STATUS_CLASSIFIED,
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Generate an image of a sunset',
                 keywords: ['generate', 'image', 'sunset'],
                 skillId: $skill->id,
                 confidence: 0.95,
                 category: 'creative',
-                sampleMessage: 'Generate an image of a sunset'
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act - search with similar keywords
             $result = $this->service->suggestSkillsForMessage('Generate an image of a sunset');
@@ -596,12 +597,14 @@ MD;
                 'keywords' => ['browse', 'website', 'open'],
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Open a website',
                 keywords: ['open', 'website'],
                 skillId: $skill->id,
                 confidence: 0.9,
-                category: 'automation'
+                category: 'automation',
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act
             $result = $this->service->findSkillForMessage('Open a website for me');
@@ -635,11 +638,14 @@ MD;
                 'checksum' => 'test123',
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Test',
                 keywords: ['test'],
                 skillId: $skill->id,
-                confidence: 0.9
+                confidence: 0.9,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act
             $stats = $this->service->getCacheStatistics();
@@ -662,11 +668,14 @@ MD;
                 'checksum' => 'test123',
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Test',
                 keywords: ['test'],
                 skillId: $skill->id,
-                confidence: 0.9
+                confidence: 0.9,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             expect(SkillMatch::count())->toBe(1);
 
