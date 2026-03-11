@@ -355,7 +355,7 @@ class LaraClawSetupCommand extends Command
             $this->line('<fg=green>  └──────────────────────────────────────────────────────────┘</>');
             $this->newLine();
 
-            if (!$result->errors) {
+            if ($result->errors) {
                 $this->newLine();
                 warning('Some errors occurred:');
                 foreach ($result->errors as $error) {
