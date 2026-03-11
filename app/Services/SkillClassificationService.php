@@ -284,14 +284,14 @@ class SkillClassificationService
         $stats = SkillMatch::getStatistics();
         $skillStats = Skill::getClassificationStats();
 
-        return [
-            'total_entries' => $stats->totalEntries,
-            'total_hits' => $stats->totalHits,
-            'skills_covered' => count($stats->topSkills),
-            'skills_pending' => $skillStats['pending'],
-            'skills_classified' => $skillStats['classified'],
-            'skills_failed' => $skillStats['failed'],
-        ];
+        return new CacheStatsDTO(
+            totalEntries: $stats->totalEntries,
+            totalHits: $stats->totalHits,
+            skillsCovered: count($stats->topSkills),
+            skillsPending: $skillStats->pending,
+            skillsClassified: $skillStats->classified,
+            skillsFailed: $skillStats->failed,
+        );
     }
 
     /**

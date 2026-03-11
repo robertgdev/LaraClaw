@@ -10,7 +10,7 @@ namespace App\DTOs;
  * Contains the output, error, exit code, and timing information
  * from executing a skill script.
  */
-readonly class ScriptExecutionResult
+final readonly class ScriptExecutionResultDTO
 {
     /**
      * @param  bool  $success  Whether the script executed successfully

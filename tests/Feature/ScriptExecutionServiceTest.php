@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\DTOs\ScriptExecutionResult;
+use App\DTOs\ScriptExecutionResultDTO;
 use App\Services\ScriptExecutionService;
 use App\Services\SettingsService;
 use App\Services\SkillSearchService;
@@ -286,9 +286,9 @@ echo "test"');
         })->skip(getenv('SKIP_SLOW_TESTS'), 'Skipping slow test');
     });
 
-    describe('ScriptExecutionResult', function () {
+    describe('ScriptExecutionResultDTO', function () {
         it('can be converted to array', function () {
-            $result = ScriptExecutionResult::success(
+            $result = ScriptExecutionResultDTO::success(
                 output: 'Test output',
                 duration: 1.5,
                 scriptPath: '/path/to/script.sh',
@@ -305,12 +305,12 @@ echo "test"');
         });
 
         it('can format output', function () {
-            $success = ScriptExecutionResult::success('Test output', 1.5);
+            $success = ScriptExecutionResultDTO::success('Test output', 1.5);
             expect($success->getFormattedOutput())
                 ->toContain('Test output')
                 ->toContain('1.5s');
 
-            $error = ScriptExecutionResult::error('Something went wrong', 1);
+            $error = ScriptExecutionResultDTO::error('Something went wrong', 1);
             expect($error->getFormattedOutput())
                 ->toContain('Error')
                 ->toContain('Something went wrong');

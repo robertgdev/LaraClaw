@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\DTOs\SkillClassificationStatsDTO;
 use App\Services\Skills\SkillChecksumCalculator;
 use App\Services\Skills\SkillSyncService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -290,15 +291,15 @@ class Skill extends Model
     /**
      * Get classification statistics.
      */
-    public static function getClassificationStats(): array
+    public static function getClassificationStats(): SkillClassificationStatsDTO
     {
-        return [
-            'total' => self::active()->count(),
-            'pending' => self::active()->pending()->count(),
-            'classified' => self::active()->classified()->count(),
-            'failed' => self::active()->failed()->count(),
-            'total_intents' => self::active()->sum('intents_count'),
-        ];
+        return new SkillClassificationStatsDTO(
+            total: self::active()->count(),
+            pending: self::active()->pending()->count(),
+            classified: self::active()->classified()->count(),
+            failed: self::active()->failed()->count(),
+            totalIntents: self::active()->sum('intents_count'),
+        );
     }
 
     // ==========================================

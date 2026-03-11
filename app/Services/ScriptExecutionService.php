@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\DTOs\ScriptExecutionResult;
+use App\DTOs\ScriptExecutionResultDTO;
 use App\Logging\MultiLogger;
 use App\Services\ScriptExecution\CommandBuilder;
 use App\Services\ScriptExecution\CommandSecurityGuard;
@@ -75,10 +75,10 @@ class ScriptExecutionService
         string $scriptName,
         array $args = [],
         ?string $agentId = null
-    ): ScriptExecutionResult {
+    ): ScriptExecutionResultDTO {
         // Check if script execution is enabled
         if (! $this->isEnabled()) {
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 'Script execution is disabled in configuration.',
                 scriptPath: $scriptName,
                 args: $args
@@ -93,7 +93,7 @@ class ScriptExecutionService
                 'available_skills' => array_keys($this->skillSearch->getAllSkills()),
             ]);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 "Skill not found: {$skillName}",
                 scriptPath: $scriptName,
                 args: $args
@@ -110,7 +110,7 @@ class ScriptExecutionService
                 'scripts_dir' => ($skill['directory'] ?? '').'/scripts',
             ]);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 "Script not found: {$scriptName}",
                 scriptPath: $scriptName,
                 args: $args
@@ -121,7 +121,7 @@ class ScriptExecutionService
         if (! $this->validator->isExtensionAllowed($scriptPath)) {
             $extension = pathinfo($scriptPath, PATHINFO_EXTENSION);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 "Script extension '.{$extension}' is not allowed. Allowed extensions: ".
                 implode(', ', $this->validator->getAllowedExtensions()),
                 scriptPath: $scriptPath,
@@ -131,7 +131,7 @@ class ScriptExecutionService
 
         // 4. Validate script is in an allowed directory
         if (! $this->validator->isScriptInAllowedDir($scriptPath)) {
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 "Script is not in an allowed skill directory: {$scriptName}",
                 scriptPath: $scriptPath,
                 args: $args
@@ -143,7 +143,7 @@ class ScriptExecutionService
 
         // 6. Check for blocked commands
         if ($this->securityGuard->isBlocked($command)) {
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 'Command contains blocked pattern. Execution denied for security.',
                 scriptPath: $scriptPath,
                 args: $args
@@ -173,7 +173,7 @@ class ScriptExecutionService
         ?string $workingDir = null,
         ?string $scriptPath = null,
         array $args = []
-    ): ScriptExecutionResult {
+    ): ScriptExecutionResultDTO {
         return $this->executor->run($command, $workingDir, $scriptPath, $args);
     }
 
@@ -253,10 +253,10 @@ class ScriptExecutionService
     public function executeDirectCommand(
         string $command,
         ?string $workingDir = null
-    ): ScriptExecutionResult {
+    ): ScriptExecutionResultDTO {
         // Check if script execution is enabled
         if (! $this->isEnabled()) {
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 'Script execution is disabled in configuration.',
                 scriptPath: 'direct',
                 args: []
@@ -271,7 +271,7 @@ class ScriptExecutionService
                 'blocked_pattern' => $blockedPattern,
             ]);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 "Command blocked for security. Command: `{$command}` contains blocked pattern: `{$blockedPattern}`",
                 scriptPath: 'direct',
                 args: []

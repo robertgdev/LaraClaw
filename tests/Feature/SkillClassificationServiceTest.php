@@ -392,9 +392,9 @@ JSON;
             $result = $this->service->getCacheStatistics();
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKeys(['total_entries', 'total_hits', 'skills_covered', 'skills_pending', 'skills_classified', 'skills_failed'])
-                ->and($result['total_entries'])->toBeGreaterThanOrEqual(1);
+            expect($result)->toBeInstanceOf(\App\DTOs\CacheStatsDTO::class)
+                ->toHaveKeys(['totalEntries', 'totalHits', 'skillsCovered', 'skillsPending', 'skillsClassified', 'skillsFailed'])
+                ->and($result->totalEntries)->toBeGreaterThanOrEqual(1);
         });
 
         it('returns zeros for empty cache', function () {
@@ -406,9 +406,9 @@ JSON;
             $result = $this->service->getCacheStatistics();
 
             // Assert
-            expect($result)->toBeArray()
-                ->and($result['total_entries'])->toBe(0)
-                ->and($result['total_hits'])->toBe(0);
+            expect($result)->toBeInstanceOf(\App\DTOs\CacheStatsDTO::class)
+                ->and($result->totalEntries)->toBe(0)
+                ->and($result->totalHits)->toBe(0);
         });
     });
 
@@ -426,11 +426,11 @@ JSON;
             $result = $service->classifyAllSkills();
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKeys(['skills_processed', 'skills_skipped', 'mappings_generated', 'mappings_stored', 'errors'])
-                ->and($result['skills_processed'])->toBe(0)
-                ->and($result['mappings_generated'])->toBe(0)
-                ->and($result['errors'])->toContain('No skills found');
+            expect($result)->toBeInstanceOf(\App\DTOs\SkillClassificationResultDTO::class)
+                ->toHaveKeys(['skillsProcessed', 'skillsSkipped', 'mappingsGenerated', 'mappingsStored', 'errors'])
+                ->and($result->skillsProcessed)->toBe(0)
+                ->and($result->mappingsGenerated)->toBe(0)
+                ->and($result->errors)->toContain('No skills found');
         });
 
         it('clears existing mappings when clearExisting is true', function () {
@@ -542,8 +542,8 @@ JSON;
             $result = $service->classifyAllSkills();
 
             // Assert - skill should be skipped (no LLM call)
-            expect($result['skills_processed'])->toBe(0)
-                ->and($result['skills_skipped'])->toBe(1);
+            expect($result->skillsProcessed)->toBe(0)
+                ->and($result->skillsSkipped)->toBe(1);
 
             // Cleanup
             unlink($tempDir.'/SKILL.md');

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\DTOs\ParsedResponse;
-use App\DTOs\ScriptExecutionResult;
+use App\DTOs\ParsedResponseDTO;
+use App\DTOs\ScriptExecutionResultDTO;
 use App\Logging\MultiLogger;
 use App\Services\ResponseParser\ExecuteBlockDetector;
 use App\Services\ResponseParser\ScriptPathResolver;
@@ -44,12 +44,12 @@ class ResponseParserService
      *
      * @param  string  $response  The AI response to parse
      * @param  string|null  $agentId  The agent context for working directory
-     * @return ParsedResponse The parsed response with execution results
+     * @return ParsedResponseDTO The parsed response with execution results
      */
     public function parseAndExecute(
         string $response,
         ?string $agentId = null
-    ): ParsedResponse {
+    ): ParsedResponseDTO {
         MultiLogger::debug('ResponseParser::parseAndExecute called', [
             'response_length' => strlen($response),
             'agent_id' => $agentId,
@@ -72,7 +72,7 @@ class ResponseParserService
             }
         );
 
-        return new ParsedResponse(
+        return new ParsedResponseDTO(
             originalResponse: $response,
             modifiedResponse: $modifiedResponse,
             executions: $executions,
@@ -108,7 +108,7 @@ class ResponseParserService
         $parsed = $this->resolver->parseCommand($command);
 
         if (empty($parsed['script'])) {
-            $executions[] = ScriptExecutionResult::error("Invalid command format: {$command}");
+            $executions[] = ScriptExecutionResultDTO::error("Invalid command format: {$command}");
             $actions[] = [
                 'type' => 'execute',
                 'success' => false,
@@ -125,7 +125,7 @@ class ResponseParserService
         $scriptInfo = $this->resolver->extractScriptInfo($scriptPath);
 
         if (! $scriptInfo) {
-            $executions[] = ScriptExecutionResult::error(
+            $executions[] = ScriptExecutionResultDTO::error(
                 "Could not determine skill from script path: {$scriptPath}"
             );
             $actions[] = [
@@ -203,11 +203,11 @@ class ResponseParserService
      *
      * Unified formatter used for both script and direct command results.
      *
-     * @param  ScriptExecutionResult  $result  The execution result
+     * @param  ScriptExecutionResultDTO  $result  The execution result
      * @param  string  $headerLabel  The label for the header (e.g., "Script: `schedule.sh`")
      * @return string Formatted result string
      */
-    protected function formatExecutionResult(ScriptExecutionResult $result, string $headerLabel): string
+    protected function formatExecutionResult(ScriptExecutionResultDTO $result, string $headerLabel): string
     {
         $header = "**{$headerLabel}**";
 

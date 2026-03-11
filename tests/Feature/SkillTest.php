@@ -319,10 +319,10 @@ describe('Skill Model', function () {
 
             $stats = Skill::getClassificationStats();
 
-            expect($stats['total'])->toBe(2)
-                ->and($stats['classified'])->toBe(1)
-                ->and($stats['pending'])->toBe(1)
-                ->and($stats['total_intents'])->toBe(5);
+            expect($stats->total)->toBe(2)
+                ->and($stats->classified)->toBe(1)
+                ->and($stats->pending)->toBe(1)
+                ->and($stats->totalIntents)->toBe(5);
         });
     });
 

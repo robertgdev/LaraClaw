@@ -10,12 +10,12 @@ namespace App\DTOs;
  * Contains the original response, the modified response after
  * script execution, and details of any executed scripts.
  */
-readonly class ParsedResponse
+readonly class ParsedResponseDTO
 {
     /**
      * @param  string  $originalResponse  The original AI response before parsing
      * @param  string  $modifiedResponse  The response after script execution replacements
-     * @param  array<ScriptExecutionResult>  $executions  List of script execution results
+     * @param  array<ScriptExecutionResultDTO>  $executions  List of script execution results
      * @param  array  $actions  List of actions performed (for logging/debugging)
      */
     public function __construct(
@@ -40,7 +40,7 @@ readonly class ParsedResponse
     {
         return count(array_filter(
             $this->executions,
-            fn (ScriptExecutionResult $r) => $r->success
+            fn (ScriptExecutionResultDTO $r) => $r->success
         ));
     }
 
@@ -51,7 +51,7 @@ readonly class ParsedResponse
     {
         return count(array_filter(
             $this->executions,
-            fn (ScriptExecutionResult $r) => ! $r->success
+            fn (ScriptExecutionResultDTO $r) => ! $r->success
         ));
     }
 
@@ -73,7 +73,7 @@ readonly class ParsedResponse
     public function getCombinedOutput(): string
     {
         $outputs = array_map(
-            fn (ScriptExecutionResult $r) => $r->output,
+            fn (ScriptExecutionResultDTO $r) => $r->output,
             $this->executions
         );
 
@@ -88,8 +88,8 @@ readonly class ParsedResponse
     public function getErrors(): array
     {
         return array_map(
-            fn (ScriptExecutionResult $r) => $r->error,
-            array_filter($this->executions, fn (ScriptExecutionResult $r) => ! $r->success)
+            fn (ScriptExecutionResultDTO $r) => $r->error,
+            array_filter($this->executions, fn (ScriptExecutionResultDTO $r) => ! $r->success)
         );
     }
 
@@ -104,7 +104,7 @@ readonly class ParsedResponse
             'original_response' => $this->originalResponse,
             'modified_response' => $this->modifiedResponse,
             'executions' => array_map(
-                fn (ScriptExecutionResult $r) => $r->toArray(),
+                fn (ScriptExecutionResultDTO $r) => $r->toArray(),
                 $this->executions
             ),
             'actions' => $this->actions,
@@ -117,7 +117,7 @@ readonly class ParsedResponse
     }
 
     /**
-     * Create a ParsedResponse with no modifications.
+     * Create a ParsedResponseDTO with no modifications.
      *
      * @param  string  $response  The original response
      */
@@ -132,12 +132,12 @@ readonly class ParsedResponse
     }
 
     /**
-     * Create a ParsedResponse with a single execution result.
+     * Create a ParsedResponseDTO with a single execution result.
      */
     public static function withExecution(
         string $originalResponse,
         string $modifiedResponse,
-        ScriptExecutionResult $execution
+        ScriptExecutionResultDTO $execution
     ): self {
         return new self(
             originalResponse: $originalResponse,
