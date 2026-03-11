@@ -16,7 +16,11 @@ readonly class ParsedResponseDTO
      * @param  string  $originalResponse  The original AI response before parsing
      * @param  string  $modifiedResponse  The response after script execution replacements
      * @param  array<ScriptExecutionResultDTO>  $executions  List of script execution results
-     * @param  array  $actions  List of actions performed (for logging/debugging)
+     * @param array<array{
+     *     type: string,
+     *     success: bool,
+     *     command: string,
+     *  }> $actions  List of actions performed (for logging/debugging)
      */
     public function __construct(
         public string $originalResponse,
