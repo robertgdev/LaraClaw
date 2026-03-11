@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\DTOs\CacheStatsDTO;
+use App\DTOs\SkillClassificationResultDTO;
 use App\Logging\MultiLogger;
 use App\Models\Skill;
 use App\Models\SkillMatch;
@@ -79,7 +81,7 @@ class SkillClassificationService
      *                                           fn(string $skillName, int $mappingsCount, int $total, int $current, string $status) => void
      * @return array{skills_processed: int, skills_skipped: int, mappings_generated: int, mappings_stored: int, errors: array}
      */
-    public function classifyAllSkills(bool $clearExisting = false, ?callable $progressCallback = null): array
+    public function classifyAllSkills(bool $clearExisting = false, ?callable $progressCallback = null): SkillClassificationResultDTO
     {
         $errors = [];
         $allMappings = new IntentMappingDTOCollection();
@@ -104,13 +106,13 @@ class SkillClassificationService
         if (empty($indexedSkills)) {
             MultiLogger::warning('No skills found to classify');
 
-            return [
-                'skills_processed' => 0,
-                'skills_skipped' => 0,
-                'mappings_generated' => 0,
-                'mappings_stored' => 0,
-                'errors' => ['No skills found'],
-            ];
+            return new SkillClassificationResultDTO(
+                skillsProcessed: 0,
+                skillsSkipped: 0,
+                mappingsGenerated: 0,
+                mappingsStored: 0,
+                errors: ['No skills found'],
+            );
         }
 
         // 3. Get skills that need classification
@@ -194,14 +196,14 @@ class SkillClassificationService
             'mappings_stored' => $stored,
         ]);
 
-        return [
-            'skills_processed' => $skillsProcessed,
-            'skills_skipped' => $skillsSkipped,
-            'mappings_generated' => count($allMappings),
-            'mappings_stored' => $stored,
-            'skills_details' => $skillsDetails,
-            'errors' => $errors,
-        ];
+        return new SkillClassificationResultDTO(
+            skillsProcessed: $skillsProcessed,
+            skillsSkipped: $skillsSkipped,
+            mappingsGenerated: count($allMappings),
+            mappingsStored: $stored,
+            skillsDetails: $skillsDetails,
+            errors: $errors,
+        );
     }
 
     /**
@@ -277,7 +279,7 @@ class SkillClassificationService
      *
      * @return array{total_entries: int, total_hits: int, skills_covered: int}
      */
-    public function getCacheStatistics(): array
+    public function getCacheStatistics(): CacheStatsDTO
     {
         $stats = SkillMatch::getStatistics();
         $skillStats = Skill::getClassificationStats();

@@ -348,17 +348,17 @@ class LaraClawSetupCommand extends Command
             $this->line('<fg=green>  ┌──────────────────────────────────────────────────────────┐</>');
             $this->line('<fg=green>  │</> <fg=white;options=bold>  Skill Classification Complete!</>                            <fg=green>│</>');
             $this->line('<fg=green>  │</>                                                          <fg=green>│</>');
-            $this->line("<fg=green>  │</>   <fg=cyan>Skills processed:</>    {$result['skills_processed']}                              <fg=green>│</>");
-            $this->line("<fg=green>  │</>   <fg=cyan>Mappings generated:</>  {$result['mappings_generated']}                            <fg=green>│</>");
-            $this->line("<fg=green>  │</>   <fg=cyan>Mappings stored:</>     {$result['mappings_stored']}                             <fg=green>│</>");
+            $this->line("<fg=green>  │</>   <fg=cyan>Skills processed:</>    {$result->skillsProcessed}                              <fg=green>│</>");
+            $this->line("<fg=green>  │</>   <fg=cyan>Mappings generated:</>  {$result->mappingsGenerated}                            <fg=green>│</>");
+            $this->line("<fg=green>  │</>   <fg=cyan>Mappings stored:</>     {$result->mappingsStored}                             <fg=green>│</>");
             $this->line('<fg=green>  │</>                                                          <fg=green>│</>');
             $this->line('<fg=green>  └──────────────────────────────────────────────────────────┘</>');
             $this->newLine();
 
-            if (! empty($result['errors'])) {
+            if (!$result->errors) {
                 $this->newLine();
                 warning('Some errors occurred:');
-                foreach ($result['errors'] as $error) {
+                foreach ($result->errors as $error) {
                     $this->line("  - {$error}");
                 }
             }
