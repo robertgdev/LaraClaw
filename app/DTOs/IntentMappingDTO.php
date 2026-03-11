@@ -17,6 +17,15 @@ final readonly class IntentMappingDTO
         public string $category,
     ) {}
 
+
+    /**
+     * @param array{
+     *     sampleIntent: string,
+     *     keywords: string[],
+     *     confidence: float,
+     *     category: string
+     * } $item
+     */
     public static function fromArray(array $item, ?int $skillId): self
     {
         return new self(
