@@ -31,11 +31,19 @@ class SkillDiscoveryResultDTO
         public string $searchTerm,
         public array $matches,
         public bool $autoInstallEnabled = false,
-        public string $autoInstallMode = 'prompt',
+        public string $autoInstallMode = 'prompt', // FIXME: convert to enum
     ) {}
 
     /**
      * Get the top match (first in list, sorted by popularity).
+     *
+     * @return null|array{
+     *     name: string,
+     *     description: string,
+     *     owner: string,
+     *     repo: string,
+     *     version?: string,
+     *     installs?: int}  $matches
      */
     public function getTopMatch(): ?array
     {
@@ -157,6 +165,22 @@ class SkillDiscoveryResultDTO
 
     /**
      * Convert to array for serialization (e.g., cache storage).
+     *
+     * @return array{
+     *     searchTerm: string,
+     *     matches: array<array{
+     *          name: string,
+     *          description: string,
+     *          owner: string,
+     *          repo: string,
+     *          version?: string,
+     *          installs?: int
+     *      }>,
+     *     autoInstallEnabled: bool,
+     *     autoInstallMode: string,
+     *     wasAutoInstalled: bool,
+     *     installedSkillName: string
+     * }
      */
     public function toArray(): array
     {
@@ -172,6 +196,15 @@ class SkillDiscoveryResultDTO
 
     /**
      * Create from array (e.g., from cache).
+     *
+     * @param array{
+     *     searchTerm: string,
+     *     matches: array<string>,
+     *     autoInstallEnabled: bool,
+     *     autoInstallMode: string,
+     *     wasAutoInstalled: bool,
+     *     installedSkillName: string
+     * } $data
      */
     public static function fromArray(array $data): self
     {

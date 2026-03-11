@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use function Safe\json_encode;
+
 /**
  * Data Transfer Object for script execution results.
  *
@@ -19,7 +21,7 @@ final readonly class ScriptExecutionResultDTO
      * @param  int  $exitCode  The process exit code
      * @param  float  $duration  Execution time in seconds
      * @param  string|null  $scriptPath  The path to the executed script
-     * @param  array  $args  The arguments passed to the script
+     * @param  array<string,string>  $args  The arguments passed to the script
      */
     public function __construct(
         public bool $success,
@@ -37,7 +39,7 @@ final readonly class ScriptExecutionResultDTO
      * @param  string  $output  The script output
      * @param  float  $duration  Execution time in seconds
      * @param  string|null  $scriptPath  The path to the executed script
-     * @param  array  $args  The arguments passed to the script
+     * @param  array<string,string>  $args  The arguments passed to the script
      */
     public static function success(
         string $output,
@@ -64,7 +66,7 @@ final readonly class ScriptExecutionResultDTO
      * @param  string  $output  Any partial output before failure
      * @param  float  $duration  Execution time in seconds
      * @param  string|null  $scriptPath  The path to the attempted script
-     * @param  array  $args  The arguments passed to the script
+     * @param  array<string,string>  $args  The arguments passed to the script
      */
     public static function error(
         string $message,

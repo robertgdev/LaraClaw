@@ -9,7 +9,7 @@ final readonly class SkillClassificationResultDTO
         public int $skillsSkipped,
         public int $mappingsGenerated,
         public int $mappingsStored,
-        /** @var array<string, array> */
+        /** @var array<string, array<string>>  $skillsDetails */
         public array $skillsDetails = [],
         /** @var string[] */
         public array $errors = []
