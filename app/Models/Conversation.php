@@ -7,6 +7,7 @@ use App\Enums\MessageStatusEnum;
 use App\Services\Conversation\ConversationSearchService;
 use App\Services\Conversation\ConversationSessionManager;
 use Database\Factories\ConversationFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -111,37 +112,37 @@ class Conversation extends Model
     // Scopes
     // ==========================================
 
-    public function scopeForChannel($query, ChannelEnum $channel)
+    public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
     }
 
-    public function scopeForTeam($query, ?string $teamId)
+    public function scopeForTeam(Builder $query, ?string $teamId): Builder
     {
         return $query->where('team_id', $teamId);
     }
 
-    public function scopeCompleted($query)
+    public function scopeCompleted(Builder $query): Builder
     {
         return $query->whereNotNull('completed_at');
     }
 
-    public function scopeRecent($query, int $days = 7)
+    public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
-    public function scopePinned($query)
+    public function scopePinned(Builder $query): Builder
     {
         return $query->where('is_pinned', true);
     }
 
-    public function scopeForSender($query, string $senderId, ChannelEnum $channel)
+    public function scopeForSender(Builder $query, string $senderId, ChannelEnum $channel): Builder
     {
         return $query->where('sender_id', $senderId)->where('channel', $channel);
     }

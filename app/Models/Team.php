@@ -6,6 +6,7 @@ use App\Observers\TeamObserver;
 use App\TypedCollections\TeamCollection;
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -225,7 +226,7 @@ class Team extends Model
     /**
      * Scope for active teams.
      */
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\DTOs\MemoryStatsDTO;
 use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Scout\Searchable;
 
@@ -84,7 +85,7 @@ class Memory extends Model
     /**
      * Scope for specific sender and channel.
      */
-    public function scopeForSender($query, string $senderId, ChannelEnum $channel)
+    public function scopeForSender(Builder $query, string $senderId, ChannelEnum $channel): Builder
     {
         return $query->where('sender_id', $senderId)
             ->where('channel', $channel);
@@ -93,7 +94,7 @@ class Memory extends Model
     /**
      * Scope for high importance memories.
      */
-    public function scopeHighImportance($query, float $threshold = 0.7)
+    public function scopeHighImportance(Builder $query, float $threshold = 0.7): Builder
     {
         return $query->where('importance', '>=', $threshold);
     }
@@ -101,7 +102,7 @@ class Memory extends Model
     /**
      * Scope for recent memories.
      */
-    public function scopeRecent($query, int $days = 7)
+    public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
@@ -109,7 +110,7 @@ class Memory extends Model
     /**
      * Scope for specific event type.
      */
-    public function scopeForEventType($query, EpisodicEventTypeEnum $eventType)
+    public function scopeForEventType(Builder $query, EpisodicEventTypeEnum $eventType): Builder
     {
         return $query->where('event_type', $eventType);
     }
@@ -117,7 +118,7 @@ class Memory extends Model
     /**
      * Scope for memories not accessed in N days.
      */
-    public function scopeNotAccessedFor($query, int $days)
+    public function scopeNotAccessedFor(Builder $query, int $days): Builder
     {
         return $query->where('last_accessed_at', '<', now()->subDays($days));
     }
@@ -125,7 +126,7 @@ class Memory extends Model
     /**
      * Scope for low importance memories.
      */
-    public function scopeLowImportance($query, float $threshold = 0.1)
+    public function scopeLowImportance(Builder $query, float $threshold = 0.1): Builder
     {
         return $query->where('importance', '<', $threshold);
     }
@@ -133,7 +134,7 @@ class Memory extends Model
     /**
      * Scope for unaccessed memories.
      */
-    public function scopeUnaccessed($query)
+    public function scopeUnaccessed(Builder $query): Builder
     {
         return $query->where('access_count', 0);
     }

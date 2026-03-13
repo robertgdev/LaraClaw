@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ChannelEnum;
 use App\Enums\PairingStatusEnum;
 use Database\Factories\PairingEntryFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -43,7 +44,7 @@ class PairingEntry extends Model
      */
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class, 'sender_id', 'sender_id');
+        return $this->hasMany(ConversationMessage::class, 'sender_id', 'sender_id');
     }
 
     /**
@@ -57,7 +58,7 @@ class PairingEntry extends Model
     /**
      * Scope for pending entries.
      */
-    public function scopePending($query)
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', PairingStatusEnum::PENDING);
     }
@@ -65,7 +66,7 @@ class PairingEntry extends Model
     /**
      * Scope for approved entries.
      */
-    public function scopeApproved($query)
+    public function scopeApproved(Builder $query): Builder
     {
         return $query->where('status', PairingStatusEnum::APPROVED);
     }
@@ -73,7 +74,7 @@ class PairingEntry extends Model
     /**
      * Scope for specific channel.
      */
-    public function scopeForChannel($query, ChannelEnum $channel)
+    public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
     }

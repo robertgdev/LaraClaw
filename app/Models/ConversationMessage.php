@@ -6,6 +6,7 @@ use App\Enums\ChannelEnum;
 use App\Enums\MessageStatusEnum;
 use App\Enums\QueueTypeEnum;
 use Database\Factories\ConversationMessageFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -120,7 +121,7 @@ class ConversationMessage extends Model
     /**
      * Scope for incoming messages (from users).
      */
-    public function scopeIncoming($query)
+    public function scopeIncoming(Builder $query): Builder
     {
         return $query->where('direction', self::DIRECTION_INCOMING);
     }
@@ -128,7 +129,7 @@ class ConversationMessage extends Model
     /**
      * Scope for outgoing messages (from agents).
      */
-    public function scopeOutgoing($query)
+    public function scopeOutgoing(Builder $query): Builder
     {
         return $query->where('direction', self::DIRECTION_OUTGOING);
     }
@@ -136,7 +137,7 @@ class ConversationMessage extends Model
     /**
      * Scope for pending messages.
      */
-    public function scopePending($query)
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::PENDING);
     }
@@ -144,7 +145,7 @@ class ConversationMessage extends Model
     /**
      * Scope for processing messages.
      */
-    public function scopeProcessing($query)
+    public function scopeProcessing(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::PROCESSING);
     }
@@ -152,7 +153,7 @@ class ConversationMessage extends Model
     /**
      * Scope for completed messages.
      */
-    public function scopeCompleted($query)
+    public function scopeCompleted(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::COMPLETED);
     }
@@ -160,7 +161,7 @@ class ConversationMessage extends Model
     /**
      * Scope for failed messages.
      */
-    public function scopeFailed($query)
+    public function scopeFailed(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::FAILED);
     }
@@ -168,7 +169,7 @@ class ConversationMessage extends Model
     /**
      * Scope for incoming queue type.
      */
-    public function scopeQueueIncoming($query)
+    public function scopeQueueIncoming(Builder $query): Builder
     {
         return $query->where('queue_type', QueueTypeEnum::INCOMING);
     }
@@ -176,7 +177,7 @@ class ConversationMessage extends Model
     /**
      * Scope for outgoing queue type.
      */
-    public function scopeQueueOutgoing($query)
+    public function scopeQueueOutgoing(Builder $query): Builder
     {
         return $query->where('queue_type', QueueTypeEnum::OUTGOING);
     }
@@ -184,7 +185,7 @@ class ConversationMessage extends Model
     /**
      * Scope for processing queue type.
      */
-    public function scopeQueueProcessing($query)
+    public function scopeQueueProcessing(Builder $query): Builder
     {
         return $query->where('queue_type', QueueTypeEnum::PROCESSING);
     }
@@ -192,7 +193,7 @@ class ConversationMessage extends Model
     /**
      * Scope for specific channel.
      */
-    public function scopeForChannel($query, ChannelEnum $channel)
+    public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
     }

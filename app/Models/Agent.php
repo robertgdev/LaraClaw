@@ -6,6 +6,7 @@ use App\Observers\AgentObserver;
 use App\TypedCollections\AgentCollection;
 use Database\Factories\AgentFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -142,7 +143,7 @@ class Agent extends Model
     /**
      * Scope for active agents.
      */
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
@@ -150,7 +151,7 @@ class Agent extends Model
     /**
      * Scope for specific provider.
      */
-    public function scopeForProvider($query, string $provider)
+    public function scopeForProvider(Builder $query, string $provider): Builder
     {
         return $query->where('provider', $provider);
     }

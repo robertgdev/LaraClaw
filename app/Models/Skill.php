@@ -5,6 +5,7 @@ namespace App\Models;
 use App\DTOs\SkillClassificationStatsDTO;
 use App\Services\Skills\SkillChecksumCalculator;
 use App\Services\Skills\SkillSyncService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -142,7 +143,7 @@ class Skill extends Model
     /**
      * Scope: Active skills only.
      */
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
@@ -150,7 +151,7 @@ class Skill extends Model
     /**
      * Scope: Inactive skills only.
      */
-    public function scopeInactive($query)
+    public function scopeInactive(Builder $query): Builder
     {
         return $query->where('is_active', false);
     }
@@ -158,7 +159,7 @@ class Skill extends Model
     /**
      * Scope: Skills with a specific classification status.
      */
-    public function scopeWithStatus($query, string $status)
+    public function scopeWithStatus(Builder $query, string $status): Builder
     {
         return $query->where('classification_status', $status);
     }
@@ -166,7 +167,7 @@ class Skill extends Model
     /**
      * Scope: Pending classification.
      */
-    public function scopePending($query)
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('classification_status', self::STATUS_PENDING);
     }
@@ -174,7 +175,7 @@ class Skill extends Model
     /**
      * Scope: Successfully classified.
      */
-    public function scopeClassified($query)
+    public function scopeClassified(Builder $query): Builder
     {
         return $query->where('classification_status', self::STATUS_CLASSIFIED);
     }
@@ -182,7 +183,7 @@ class Skill extends Model
     /**
      * Scope: Failed classification.
      */
-    public function scopeFailed($query)
+    public function scopeFailed(Builder $query): Builder
     {
         return $query->where('classification_status', self::STATUS_FAILED);
     }
@@ -190,7 +191,7 @@ class Skill extends Model
     /**
      * Scope: Skills needing classification (pending or failed).
      */
-    public function scopeNeedsClassification($query)
+    public function scopeNeedsClassification(Builder $query): Builder
     {
         return $query->whereIn('classification_status', [self::STATUS_PENDING, self::STATUS_FAILED]);
     }
@@ -198,7 +199,7 @@ class Skill extends Model
     /**
      * Scope: Skills with a specific checksum.
      */
-    public function scopeWithChecksum($query, string $checksum)
+    public function scopeWithChecksum(Builder $query, string $checksum): Builder
     {
         return $query->where('checksum', $checksum);
     }

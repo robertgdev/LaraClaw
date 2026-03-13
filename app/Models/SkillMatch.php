@@ -8,6 +8,7 @@ use App\DTOs\SkillMatchStatisticsDTO;
 use App\Services\Skills\SignatureGenerator;
 use App\Services\Skills\SkillMatchRepository;
 use App\Services\Skills\SkillMatchStatisticsService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -98,62 +99,62 @@ class SkillMatch extends Model
     // Query Scopes
     // ==========================================
 
-    public function scopeBySignature($query, string $signature)
+    public function scopeBySignature(Builder $query, string $signature): Builder
     {
         return $query->where('intent_signature', $signature);
     }
 
-    public function scopeForSkill($query, int $skillId)
+    public function scopeForSkill(Builder $query, int $skillId): Builder
     {
         return $query->where('skill_id', $skillId);
     }
 
-    public function scopeForSkillName($query, string $skillName)
+    public function scopeForSkillName(Builder $query, string $skillName): Builder
     {
         return $query->whereHas('skill', fn ($q) => $q->where('name', $skillName));
     }
 
-    public function scopeForCategory($query, string $category)
+    public function scopeForCategory(Builder $query, string $category): Builder
     {
         return $query->where('intent_category', $category);
     }
 
-    public function scopeMinConfidence($query, float $minConfidence)
+    public function scopeMinConfidence(Builder $query, float $minConfidence): Builder
     {
         return $query->where('confidence_score', '>=', $minConfidence);
     }
 
-    public function scopeHighConfidence($query)
+    public function scopeHighConfidence(Builder $query): Builder
     {
         return $query->where('confidence_score', '>=', 0.8);
     }
 
-    public function scopeMediumConfidence($query)
+    public function scopeMediumConfidence(Builder $query): Builder
     {
         return $query->where('confidence_score', '>=', 0.5);
     }
 
-    public function scopePopular($query)
+    public function scopePopular(Builder $query): Builder
     {
         return $query->orderByDesc('hit_count');
     }
 
-    public function scopeByConfidence($query, string $direction = 'desc')
+    public function scopeByConfidence(Builder $query, string $direction = 'desc'): Builder
     {
         return $query->orderBy('confidence_score', $direction);
     }
 
-    public function scopeForAgent($query, string $agentId)
+    public function scopeForAgent(Builder $query, string $agentId): Builder
     {
         return $query->where('suggested_agent', $agentId);
     }
 
-    public function scopeWithKeyword($query, string $keyword)
+    public function scopeWithKeyword(Builder $query, string $keyword): Builder
     {
         return $query->whereJsonContains('intent_keywords', $keyword);
     }
 
-    public function scopeWithAnyKeyword($query, array $keywords)
+    public function scopeWithAnyKeyword(Builder $query, array $keywords): Builder
     {
         return $query->where(function ($q) use ($keywords) {
             foreach ($keywords as $keyword) {
@@ -162,12 +163,12 @@ class SkillMatch extends Model
         });
     }
 
-    public function scopeRecent($query, int $days = 7)
+    public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    public function scopeFrequent($query, int $minHits = 5)
+    public function scopeFrequent(Builder $query, int $minHits = 5): Builder
     {
         return $query->where('hit_count', '>=', $minHits);
     }
