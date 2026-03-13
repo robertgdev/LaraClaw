@@ -20,6 +20,8 @@ class Event extends Model
 
     /**
      * Emit an event (like the Node.js emitEvent function).
+     *
+     * @param  array<mixed>  $data
      */
     public static function emit(string $type, array $data): self
     {

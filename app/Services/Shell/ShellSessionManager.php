@@ -85,7 +85,7 @@ class ShellSessionManager
      */
     public function listSessions(Command $command): void
     {
-        $sessions = $this->sessionService->getSessions($this->senderId, ChannelEnum::CLI);
+        $sessions = $this->sessionService->getSessions(ChannelEnum::CLI, $this->senderId);
 
         $command->newLine();
         $command->line('<fg=cyan>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</>');
@@ -154,7 +154,7 @@ class ShellSessionManager
             return false;
         }
 
-        $sessions = $this->sessionService->getSessions($this->senderId, ChannelEnum::CLI);
+        $sessions = $this->sessionService->getSessions(ChannelEnum::CLI, $this->senderId);
         $session = $sessions->get($sessionNum - 1);
 
         if (! $session) {

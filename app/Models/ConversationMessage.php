@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -97,7 +98,7 @@ class ConversationMessage extends Model
     /**
      * Get replies to this message.
      */
-    public function replies()
+    public function replies(): HasMany
     {
         return $this->hasMany(ConversationMessage::class, 'reply_to', 'id');
     }
@@ -258,6 +259,15 @@ class ConversationMessage extends Model
 
     /**
      * Create an incoming message (from user).
+     *
+     * @param array{
+     *     conversation_id: string,
+     *     channel: ChannelEnum,
+     *     sender: string,
+     *     sender_id: string,
+     *     message: string,
+     *     fullMessage: string
+     * } $data
      */
     public static function createIncoming(array $data): self
     {
@@ -270,6 +280,19 @@ class ConversationMessage extends Model
 
     /**
      * Create an outgoing message (from agent).
+     *
+     * @param array{
+     *      conversation_id: string,
+     *      channel: ChannelEnum,
+     *      sender: string,
+     *      sender_id: string,
+     *      message: string,
+     *      agent_id: string,
+     *      provider: string,
+     *      model: string,
+     *      status: MessageStatusEnum,
+     *      processed_at: string
+     *  } $data
      */
     public static function createOutgoing(array $data): self
     {
@@ -285,7 +308,21 @@ class ConversationMessage extends Model
     // ==========================================
 
     /**
-     * Convert to array format compatible with Node.js version.
+     * Convert to array format
+     *
+     * @return array{
+     *       channel: ChannelEnum,
+     *       sender: string,
+     *       sender_id: string,
+     *       message: string,
+     *       timestamp: string,
+     *       message_id: string,
+     *       agent: string,
+     *       files: array<string>,
+     *       conversation_id: string,
+     *       direction: string,
+     *       isInternal: bool,
+     *   }
      */
     public function toMessageData(): array
     {
@@ -306,6 +343,19 @@ class ConversationMessage extends Model
 
     /**
      * Convert to response data format.
+     *
+     * @return array{
+     *        channel: ChannelEnum,
+     *        sender: string,
+     *        sender_id: string,
+     *        message: string,
+     *        timestamp: string,
+     *        message_id: string,
+     *        agent: string,
+     *        files: array<string>,
+     *        provider: string,
+     *        model: string,
+     *    }
      */
     public function toResponseData(): array
     {

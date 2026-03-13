@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\File;
  * @property string|null $source_type Where skill comes from
  * @property string $description Skill description from SKILL.md
  * @property string|null $license License if specified
- * @property array|null $keywords Extracted keywords
+ * @property array<string>|null $keywords Extracted keywords
  * @property string $checksum SHA-256 hash of all skill files
  * @property bool $has_scripts Has scripts directory
  * @property bool $has_references Has references directory
@@ -50,7 +50,7 @@ use Illuminate\Support\Facades\File;
  * @property int $intents_count Number of intents generated
  * @property string|null $last_error Last classification error if any
  * @property bool $is_active Soft disable flag
- * @property array|null $metadata Extensible metadata
+ * @property array<string,string>|null $metadata Extensible metadata
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  */

@@ -23,7 +23,7 @@ class SkillDiscoveryResultDTO
 
     /**
      * @param  string  $searchTerm  The search term used
-     * @param  array<array{name: string, description: string, owner: string, repo: string, version?: string, installs?: int}>  $matches
+     * @param  array<array{searchTerm: string, matches: array<string>, autoInstalled: bool, autoIntallMode: bool}>  $matches
      * @param  bool  $autoInstallEnabled  Whether auto-install is enabled in config
      * @param  string  $autoInstallMode  'first' or 'prompt'
      */

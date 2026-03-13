@@ -245,7 +245,7 @@ class ConversationStateManagerService
      * Note: This requires a cache store that supports pattern-based key retrieval.
      * For Redis, this uses KEYS command. For other stores, this may not work.
      *
-     * @return array<string, string>
+     * @return array<int>
      */
     public function getActiveConversationIds(): array
     {

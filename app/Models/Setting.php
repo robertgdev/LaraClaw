@@ -34,6 +34,8 @@ class Setting extends Model
 
     /**
      * Get all settings as a keyed array.
+     *
+     * @return array<string, mixed>
      */
     public static function getAllKeyed(): array
     {
@@ -67,6 +69,8 @@ class Setting extends Model
 
     /**
      * Set multiple settings at once.
+     *
+     * @param  array<string, mixed>  $settings
      */
     public static function setMany(array $settings): void
     {

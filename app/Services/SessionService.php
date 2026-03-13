@@ -7,6 +7,7 @@ use App\Logging\MultiLogger;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use Illuminate\Support\Collection;
+use function Safe\preg_match;
 
 /**
  * SessionService - Manages conversation sessions (WebClaw-style).

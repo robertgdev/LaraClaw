@@ -194,6 +194,12 @@ class PairingEntry extends Model
 
     /**
      * Ensure sender is paired, return check result.
+     *
+     * @return array{
+     *     approved: bool,
+     *     code: string,
+     *     isNewPending: bool
+     * }
      */
     public static function ensureSenderPaired(ChannelEnum $channel, string $senderId, string $sender): array
     {

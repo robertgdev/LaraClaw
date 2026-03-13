@@ -62,10 +62,10 @@ class Memory extends Model
         return [
             'id' => $this->id,
             'sender_id' => $this->sender_id,
-            'channel' => $this->channel?->value ?? $this->channel,
+            'channel' => $this->channel->value ?? $this->channel,
             'content' => $this->content,
             'outcome' => $this->outcome,
-            'event_type' => $this->event_type?->value ?? $this->event_type,
+            'event_type' => $this->event_type->value ?? $this->event_type,
         ];
     }
 

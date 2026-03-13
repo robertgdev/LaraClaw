@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Setup;
 
 use Illuminate\Support\Facades\File;
+use function Safe\preg_match;
+use function Safe\preg_replace;
 
 /**
  * Handles reading and writing .env file configuration changes.
