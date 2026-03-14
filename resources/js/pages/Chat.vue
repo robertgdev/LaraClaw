@@ -119,6 +119,13 @@ const {
 } = useChatStream({
     sessionKey: currentSessionKey,
     friendlyId: currentFriendlyId,
+    onMessageFeedbackSaved: (messageId, feedback) => {
+        // Server confirmed feedback saved — update local message state
+        const msg = messages.value.find(
+            (m) => m.messageId === messageId || m.id === messageId,
+        );
+        if (msg) msg.feedback = feedback;
+    },
     onMessage: (message) => {
         // Only replace an existing message if it shares the SAME streaming run id.
         // Never replace a message that belongs to a different run.
@@ -218,9 +225,8 @@ async function handleDeleteSession(session: SessionMeta) {
 }
 
 function handleMessageFeedback(messageId: string, feedback: FeedbackValue) {
+    // Send via WebSocket; the UI will update when onMessageFeedbackSaved fires
     sendWsMessage({ type: 'feedback_message', message_id: messageId, feedback });
-    const msg = messages.value.find((m) => m.messageId === messageId || m.id === messageId);
-    if (msg) msg.feedback = feedback;
 }
 
 function handleLogout() {

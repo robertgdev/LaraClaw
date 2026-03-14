@@ -19,6 +19,8 @@ interface UseChatStreamOptions {
     onHistoryRefresh?: () => void;
     onConnectionChange?: (connected: boolean) => void;
     onConversationId?: (conversationId: string) => void;
+    /** Called when the server confirms feedback was saved for a message. */
+    onMessageFeedbackSaved?: (messageId: string, feedback: import('@/types/chat').FeedbackValue) => void;
 }
 
 interface WebSocketMessage {
@@ -31,7 +33,7 @@ interface WebSocketMessage {
 }
 
 export function useChatStream(options: UseChatStreamOptions) {
-    const { sessionKey, friendlyId, onMessage, onStateChange, onHistoryRefresh, onConnectionChange, onConversationId } = options;
+    const { sessionKey, friendlyId, onMessage, onStateChange, onHistoryRefresh, onConnectionChange, onConversationId, onMessageFeedbackSaved } = options;
 
     const authStore = useAuthStore();
     const isConnected = ref(false);
@@ -213,6 +215,17 @@ export function useChatStream(options: UseChatStreamOptions) {
             case 'pong':
                 // Heartbeat response
                 break;
+
+            case 'feedback_message_saved': {
+                // Server confirmed message feedback was stored
+                const savedData = (data.data || {}) as Record<string, unknown>;
+                const msgId = typeof savedData.message_id === 'string' ? savedData.message_id : '';
+                const fbVal = typeof savedData.feedback === 'number' ? savedData.feedback as import('@/types/chat').FeedbackValue : null;
+                if (msgId && fbVal !== null) {
+                    onMessageFeedbackSaved?.(msgId, fbVal);
+                }
+                break;
+            }
 
             case 'error':
                 error.value = data.message || 'Server error';

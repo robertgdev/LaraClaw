@@ -105,9 +105,11 @@ class ChatController extends Controller
         $formattedMessages = $messages->map(function (ConversationMessage $msg): array {
             return [
                 'id' => $msg->id,
+                'messageId' => $msg->message_id,
                 'role' => $msg->direction === 'incoming' ? 'user' : 'assistant',
                 'content' => [['type' => 'text', 'text' => $msg->message]],
                 'timestamp' => $msg->created_at?->timestamp,
+                'feedback' => $msg->feedback?->value,
             ];
         });
 
