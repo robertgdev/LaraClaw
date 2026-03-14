@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick, type PropType } from 'vue';
-import { cn } from '@/lib/utils';
-import type { GatewayMessage } from '@/types/chat';
+import type { GatewayMessage, FeedbackValue } from '@/types/chat';
 import { getToolCallsFromMessage } from '@/lib/chat-utils';
 import { useChatSettingsStore } from '@/stores/chatSettings';
 import MessageItem from './MessageItem.vue';
@@ -11,45 +10,34 @@ const props = defineProps({
         type: Array as PropType<GatewayMessage[]>,
         required: true,
     },
-    loading: {
-        type: Boolean,
-        default: false,
-    },
-    empty: {
-        type: Boolean,
-        default: false,
-    },
     waitingForResponse: {
         type: Boolean,
         default: false,
     },
-    sessionKey: {
-        type: String,
-        default: '',
-    },
 });
 
+const emit = defineEmits<{
+    feedback: [messageId: string, feedback: FeedbackValue];
+}>();
+
 const settingsStore = useChatSettingsStore();
-
 const scrollRef = ref<HTMLDivElement | null>(null);
-const anchorRef = ref<HTMLDivElement | null>(null);
-const isUserScrolling = ref(false);
+const userIsScrolling = ref(false);
 
-// Compute linked tool call IDs
+// Linked tool call IDs (so we can skip toolResult messages that are paired)
 const linkedToolCallIds = computed(() => {
     const ids = new Set<string>();
-    for (const message of props.messages) {
-        if (message.role !== 'assistant') continue;
-        const toolCalls = getToolCallsFromMessage(message);
-        for (const toolCall of toolCalls) {
-            const toolCallId = typeof toolCall.id === 'string' ? toolCall.id.trim() : '';
-            if (toolCallId) ids.add(toolCallId);
+    for (const msg of props.messages) {
+        if (msg.role !== 'assistant') continue;
+        for (const tc of getToolCallsFromMessage(msg)) {
+            const id = typeof tc.id === 'string' ? tc.id.trim() : '';
+            if (id) ids.add(id);
         }
     }
     return ids;
 });
 
-// Filter messages for display
+// Messages to display — skip paired toolResult entries when showToolMessages is enabled
 const displayMessages = computed(() => {
     return props.messages.filter((msg) => {
         if (msg.role !== 'toolResult') return true;
@@ -60,92 +48,75 @@ const displayMessages = computed(() => {
     });
 });
 
-// Build tool results map
+// Tool results map for assistant messages
 const toolResultsByCallId = computed(() => {
     const map = new Map<string, GatewayMessage>();
-    for (const message of props.messages) {
-        if (message.role !== 'toolResult') continue;
-        const toolCallId = message.toolCallId;
-        if (typeof toolCallId === 'string' && toolCallId.trim().length > 0) {
-            map.set(toolCallId, message);
+    for (const msg of props.messages) {
+        if (msg.role !== 'toolResult') continue;
+        const toolCallId = msg.toolCallId;
+        if (typeof toolCallId === 'string' && toolCallId.trim()) {
+            map.set(toolCallId, msg);
         }
     }
     return map;
 });
 
-// Find last assistant and user indices
-const lastAssistantIndex = computed(() => {
-    const indices = displayMessages.value
-        .map((message, index) => ({ message, index }))
-        .filter(({ message }) => message.role !== 'user')
-        .map(({ index }) => index);
-    return indices.pop();
-});
-
+// Typing indicator: show when waiting and no assistant reply yet after last user message
 const lastUserIndex = computed(() => {
-    const indices = displayMessages.value
-        .map((message, index) => ({ message, index }))
-        .filter(({ message }) => message.role === 'user')
-        .map(({ index }) => index);
-    return indices.pop();
+    let idx = -1;
+    for (let i = 0; i < displayMessages.value.length; i++) {
+        if (displayMessages.value[i].role === 'user') idx = i;
+    }
+    return idx;
 });
 
-// Show typing indicator
+const lastAssistantIndex = computed(() => {
+    let idx = -1;
+    for (let i = 0; i < displayMessages.value.length; i++) {
+        if (displayMessages.value[i].role !== 'user') idx = i;
+    }
+    return idx;
+});
+
 const showTypingIndicator = computed(() => {
     return (
         props.waitingForResponse &&
-        (typeof lastUserIndex.value !== 'number' ||
-            typeof lastAssistantIndex.value !== 'number' ||
+        (lastUserIndex.value === -1 ||
+            lastAssistantIndex.value === -1 ||
             lastAssistantIndex.value < lastUserIndex.value)
     );
 });
 
-// Check if scrolled to bottom
 function isScrolledToBottom(): boolean {
     if (!scrollRef.value) return true;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.value;
-    return scrollHeight - scrollTop - clientHeight < 50;
+    return scrollHeight - scrollTop - clientHeight < 60;
 }
 
-// Auto-scroll to bottom
-function scrollToBottom(smooth: boolean = false) {
+function scrollToBottom() {
     nextTick(() => {
         if (scrollRef.value) {
-            scrollRef.value.scrollTo({
-                top: scrollRef.value.scrollHeight,
-                behavior: smooth ? 'smooth' : 'auto',
-            });
+            scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
         }
     });
 }
 
-// Handle user scroll
 function handleScroll() {
-    if (scrollRef.value) {
-        // If user scrolls up, mark as scrolling
-        const { scrollTop, scrollHeight, clientHeight } = scrollRef.value;
-        isUserScrolling.value = scrollHeight - scrollTop - clientHeight > 100;
-    }
+    if (!scrollRef.value) return;
+    userIsScrolling.value = !isScrolledToBottom();
 }
 
-// Watch for new messages
 watch(
     () => props.messages.length,
     () => {
-        // Only auto-scroll if user is near bottom
-        if (!isUserScrolling.value) {
-            scrollToBottom();
-        }
+        if (!userIsScrolling.value) scrollToBottom();
     },
 );
 
-// Scroll to bottom when waiting for response changes
 watch(
     () => props.waitingForResponse,
-    (newVal) => {
-        if (newVal && !isUserScrolling.value) {
-            scrollToBottom();
-        }
+    (val) => {
+        if (val && !userIsScrolling.value) scrollToBottom();
     },
 );
 
@@ -155,52 +126,50 @@ onMounted(() => {
 </script>
 
 <template>
-    <div 
-        class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-surface dark:bg-primary-950" 
+    <!-- scrollbar-thin uses Tailwind scrollbar plugin; fallback handled via CSS below -->
+    <div
         ref="scrollRef"
+        class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style="scrollbar-width: thin; scrollbar-color: rgba(156,163,175,0.5) transparent;"
         @scroll="handleScroll"
     >
-        <div class="flex flex-col min-h-full">
-            <!-- Main content area - pushes content to bottom -->
-            <div class="flex-1 flex flex-col justify-end">
-                <div class="pt-6 pb-4">
-                    <div class="mx-auto w-full max-w-full px-5 sm:max-w-[768px] sm:min-w-[400px]">
-                        <!-- Empty state -->
-                        <div v-if="empty && !loading" class="flex items-center justify-center min-h-[200px]">
-                            <div class="text-center text-primary-500 dark:text-primary-400">
-                                <p class="text-lg">Start a conversation</p>
-                                <p class="text-sm mt-2">Type a message below to begin</p>
-                            </div>
-                        </div>
+        <div class="pt-6 pb-2 px-4">
+            <div class="mx-auto w-full max-w-2xl">
 
-                        <!-- Messages -->
-                        <div v-else class="flex flex-col space-y-6">
-                            <MessageItem
-                                v-for="(chatMessage, index) in displayMessages"
-                                :key="chatMessage.__optimisticId || chatMessage.id || index"
-                                :message="chatMessage"
-                                :tool-results-by-call-id="
-                                    chatMessage.role === 'assistant' && getToolCallsFromMessage(chatMessage).length > 0
-                                        ? toolResultsByCallId
-                                        : undefined
-                                "
-                                :force-actions-visible="typeof lastAssistantIndex === 'number' && index === lastAssistantIndex"
-                            />
+                <!-- Empty state -->
+                <div v-if="displayMessages.length === 0 && !waitingForResponse" class="flex flex-col items-center justify-center h-48 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-neutral-300 dark:text-neutral-600 mb-3">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <p class="text-neutral-500 dark:text-neutral-400 text-sm">Start a conversation</p>
+                    <p class="text-neutral-400 dark:text-neutral-500 text-xs mt-1">Type a message below to begin</p>
+                </div>
 
-                            <!-- Typing indicator -->
-                            <div v-if="showTypingIndicator" class="py-2">
-                                <div class="flex items-center gap-2 text-primary-500 dark:text-primary-400">
-                                    <div class="flex gap-1">
-                                        <span class="w-2 h-2 bg-primary-400 dark:bg-primary-500 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
-                                        <span class="w-2 h-2 bg-primary-400 dark:bg-primary-500 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
-                                        <span class="w-2 h-2 bg-primary-400 dark:bg-primary-500 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
-                                    </div>
-                                    <span class="text-sm">Thinking...</span>
-                                </div>
-                            </div>
+                <!-- Message list -->
+                <div v-else class="flex flex-col gap-5">
+                    <MessageItem
+                        v-for="(msg, index) in displayMessages"
+                        :key="msg.__optimisticId || msg.id || index"
+                        :message="msg"
+                        :tool-results-by-call-id="
+                            msg.role === 'assistant' && getToolCallsFromMessage(msg).length > 0
+                                ? toolResultsByCallId
+                                : undefined
+                        "
+                        @feedback="(id, fb) => $emit('feedback', id, fb)"
+                    />
+
+                    <!-- Typing indicator -->
+                    <div v-if="showTypingIndicator" class="flex items-center gap-2 py-1">
+                        <div class="flex gap-1">
+                            <span class="w-2 h-2 rounded-full bg-neutral-400 dark:bg-neutral-500 animate-bounce" style="animation-delay: 0ms" />
+                            <span class="w-2 h-2 rounded-full bg-neutral-400 dark:bg-neutral-500 animate-bounce" style="animation-delay: 160ms" />
+                            <span class="w-2 h-2 rounded-full bg-neutral-400 dark:bg-neutral-500 animate-bounce" style="animation-delay: 320ms" />
                         </div>
+                        <span class="text-xs text-neutral-400 dark:text-neutral-500">Thinking…</span>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
