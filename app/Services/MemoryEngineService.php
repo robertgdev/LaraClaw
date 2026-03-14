@@ -141,7 +141,8 @@ class MemoryEngineService
                 lastAccessedAtMs: $result->last_accessed_at->timestamp * 1000,
                 accessCount: $result->access_count,
                 importance: (float) $result->importance,
-                nowMs: $now
+                nowMs: $now,
+                feedbackScore: $result->feedback_score
             );
 
             $results[] = new MemorySearchResultDTO(

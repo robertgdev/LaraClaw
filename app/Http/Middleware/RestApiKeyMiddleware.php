@@ -11,7 +11,15 @@ use function Safe\preg_match;
 /**
  * Middleware to authenticate REST API requests using an API key.
  *
- * The API key should be provided in one of the following locations:
+ * The provided key is validated against two configured keys (in order):
+ *   1. LARACLAW_REST_API_KEY  — dedicated REST API key (optional)
+ *   2. LARACLAW_SERVER_API_KEY — the WebSocket / server key (always set)
+ *
+ * Access is granted if the provided key matches EITHER configured key.
+ * This allows pure REST clients to use a dedicated key while the Vue frontend
+ * (which only knows the server/WS key entered at login) also gets access.
+ *
+ * The API key must be provided in one of the following locations:
  * - X-API-Key header
  * - Authorization header with Bearer scheme
  * - api_key query parameter
@@ -25,18 +33,19 @@ class RestApiKeyMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $configuredKey = config('laraclaw.rest_api_key');
+        $restApiKey    = config('laraclaw.rest_api_key');
+        $serverApiKey  = config('laraclaw.server_api_key');
 
-        // If no API key is configured, deny access (security by default)
-        if (empty($configuredKey)) {
+        // At least one key must be configured
+        if (empty($restApiKey) && empty($serverApiKey)) {
             return new JsonResponse([
                 'error' => 'API key not configured',
-                'message' => 'The REST API key has not been configured. Set LARACLAW_REST_API_KEY in your .env file.',
+                'message' => 'No API key has been configured. Set LARACLAW_REST_API_KEY or LARACLAW_SERVER_API_KEY in your .env file.',
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        // Try to get the API key from various sources
         $providedKey = $this->extractApiKey($request);
+
         if (empty($providedKey)) {
             return new JsonResponse([
                 'error' => 'API key required',
@@ -44,8 +53,12 @@ class RestApiKeyMiddleware
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Use timing-safe comparison to prevent timing attacks
-        if (! hash_equals($configuredKey, $providedKey)) {
+        // Accept the request if the provided key matches EITHER configured key.
+        // Use timing-safe comparison to prevent timing attacks.
+        $matchesRestKey   = !empty($restApiKey)   && hash_equals($restApiKey,   $providedKey);
+        $matchesServerKey = !empty($serverApiKey) && hash_equals($serverApiKey, $providedKey);
+
+        if (!$matchesRestKey && !$matchesServerKey) {
             return new JsonResponse([
                 'error' => 'Invalid API key',
                 'message' => 'The provided API key is not valid.',

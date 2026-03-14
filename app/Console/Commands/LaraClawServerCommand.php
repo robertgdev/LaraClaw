@@ -345,7 +345,19 @@ class LaraClawServerCommand extends Command
         $clientId = spl_object_id($client);
 
         // Try to parse the message as JSON
-        $data = json_decode($message, true);
+        try {
+            $data = json_decode($message, true);
+        } catch (\Safe\Exceptions\JsonException $e) {
+            // Invalid JSON, send error response
+            $response = new CommandResponseDTO(
+                type: 'error',
+                success: false,
+                message: 'Invalid JSON: '.$e->getMessage(),
+            );
+            $this->sendToClient($client, $response);
+
+            return;
+        }
 
         // Handle authentication
         if ($data && isset($data['type']) && $data['type'] === 'auth') {
@@ -600,10 +612,15 @@ class LaraClawServerCommand extends Command
             return false;
         }
 
-        // Check if process is running
-        posix_kill($pid, 0);
+        // Check if process is running (signal 0 doesn't kill, just checks)
+        try {
+            posix_kill($pid, 0);
 
-        return true;
+            return true;
+        } catch (\Safe\Exceptions\PosixException $e) {
+            // Process doesn't exist
+            return false;
+        }
     }
 
     /**

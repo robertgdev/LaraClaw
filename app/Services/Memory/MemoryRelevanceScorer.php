@@ -10,13 +10,15 @@ use function Safe\preg_split;
 /**
  * Scores memory relevance using hybrid ranking.
  *
- * Combines three signals:
+ * Combines four signals:
  * - Full-text search score (normalized 0-1)
  * - Temporal decay via Ebbinghaus forgetting curve
  * - Importance weight from the memory record
+ * - Feedback score from user feedback (positive/negative/neutral)
  *
  * Scoring formula:
- *   relevance = (fts_score × fts_weight) + (temporal_score × temporal_weight) + (importance × importance_weight)
+ *   relevance = (fts_score × fts_weight) + (temporal_score × temporal_weight) 
+ *             + (importance × importance_weight) + (feedback_score × feedback_weight)
  */
 class MemoryRelevanceScorer
 {
@@ -31,6 +33,7 @@ class MemoryRelevanceScorer
      * @param  int  $accessCount  Number of times the memory has been accessed
      * @param  float  $importance  Importance score (0.0 - 1.0)
      * @param  int  $nowMs  Current timestamp in milliseconds
+     * @param  float|null  $feedbackScore  Feedback score (-1.0 to 1.0, null if no feedback)
      */
     public function score(
         float $rawFtsScore,
@@ -38,14 +41,17 @@ class MemoryRelevanceScorer
         int $lastAccessedAtMs,
         int $accessCount,
         float $importance,
-        int $nowMs
+        int $nowMs,
+        ?float $feedbackScore = null
     ): float {
         $ftsScore = $this->normalizeScore($rawFtsScore, $maxFtsScore);
         $temporalScore = $this->computeTemporalScore($lastAccessedAtMs, $accessCount, $nowMs);
+        $feedbackComponent = $this->computeFeedbackComponent($feedbackScore);
 
         return ($ftsScore * $this->getWeight('fts'))
             + ($temporalScore * $this->getWeight('temporal'))
-            + ($importance * $this->getWeight('importance'));
+            + ($importance * $this->getWeight('importance'))
+            + ($feedbackComponent * $this->getWeight('feedback'));
     }
 
     /**
@@ -66,6 +72,25 @@ class MemoryRelevanceScorer
         $accessBonus = 1 + ($bonus * $accessCount);
 
         return min(1.0, $decay * $accessBonus);
+    }
+
+    /**
+     * Compute feedback component for scoring.
+     *
+     * Converts feedback score (-1 to 1) to a positive component (0 to 1).
+     * - Positive feedback (1.0) -> 1.0
+     * - Neutral feedback (0.0) -> 0.5
+     * - Negative feedback (-1.0) -> 0.0
+     * - No feedback (null) -> 0.5 (neutral baseline)
+     */
+    public function computeFeedbackComponent(?float $feedbackScore): float
+    {
+        if ($feedbackScore === null) {
+            return 0.5; // Neutral baseline when no feedback
+        }
+
+        // Map -1..1 to 0..1
+        return ($feedbackScore + 1) / 2;
     }
 
     /**
@@ -113,10 +138,11 @@ class MemoryRelevanceScorer
     public function getWeight(string $type): float
     {
         return config("memory.scoring.{$type}_weight", match ($type) {
-            'fts' => 0.4,
-            'temporal' => 0.3,
-            'importance' => 0.3,
-            default => 0.33,
+            'fts' => 0.35,
+            'temporal' => 0.25,
+            'importance' => 0.20,
+            'feedback' => 0.20,
+            default => 0.25,
         });
     }
 }
