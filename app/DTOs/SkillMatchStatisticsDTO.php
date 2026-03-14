@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\TypedCollections\TopSkillDTOCollection;
+
 final readonly class SkillMatchStatisticsDTO
 {
     /**
-     * @param  array<int, array{skill_id: int, skill_name: string, count: int, hits: int}>  $topSkills
+     * @param  TopSkillDTOCollection  $topSkills
      * @param  array<int, array{intent_category: string, count: int}>  $topCategories
      */
     public function __construct(
@@ -15,7 +17,7 @@ final readonly class SkillMatchStatisticsDTO
         public int $totalHits,
         public float $avgConfidence,
         public int $highConfidenceCount,
-        public array $topSkills,
+        public TopSkillDTOCollection $topSkills,
         public array $topCategories,
         public int $recentEntries,
     ) {}

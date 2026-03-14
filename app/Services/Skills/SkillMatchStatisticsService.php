@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Services\Skills;
 
 use App\DTOs\SkillMatchStatisticsDTO;
+use App\DTOs\TopSkillDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
+use App\TypedCollections\TopSkillDTOCollection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -37,10 +39,8 @@ class SkillMatchStatisticsService
 
     /**
      * Get top skills with their match counts and hit totals.
-     *
-     * @return array<int, array{skill_id: int, skill_name: string, count: int, hits: int}>
      */
-    private function getTopSkills(): array
+    private function getTopSkills(): TopSkillDTOCollection
     {
         $results = DB::table('skill_matches')
             ->selectRaw('skill_id, COUNT(*) as count, SUM(hit_count) as hits')
@@ -49,17 +49,19 @@ class SkillMatchStatisticsService
             ->limit(10)
             ->get();
 
-        $topSkills = [];
+        $topSkillsCollection = new TopSkillDTOCollection;
         foreach ($results as $row) {
             $skill = Skill::find($row->skill_id);
-            $topSkills[] = [
-                'skill_id' => $row->skill_id,
-                'skill_name' => $skill->name ?? 'unknown',
-                'count' => (int) $row->count,
-                'hits' => (int) $row->hits,
-            ];
+            $topSkillsCollection->add(
+                new TopSkillDTO(
+                    skillId: $row->skill_id,
+                    skillName: $skill->name ?? 'unknown',
+                    count: (int) $row->count,
+                    hits: (int) $row->hits,
+                )
+            );
         }
 
-        return $topSkills;
+        return $topSkillsCollection;
     }
 }
