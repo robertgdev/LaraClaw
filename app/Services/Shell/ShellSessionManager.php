@@ -121,8 +121,8 @@ class ShellSessionManager
     public function startNewSession(Command $command): bool
     {
         $this->currentSession = $this->sessionService->createSession(
-            $this->senderId,
             ChannelEnum::CLI,
+            $this->senderId,
             'shell-user'
         );
 
@@ -195,7 +195,12 @@ class ShellSessionManager
         }
 
         $newName = trim($args);
-        $this->sessionService->renameSession($this->currentSession->conversation_id, $newName);
+        $this->sessionService->renameSession(
+            $this->currentSession->conversation_id,
+            $newName,
+            ChannelEnum::CLI,
+            $this->senderId
+        );
         $this->currentSession->refresh();
 
         $command->newLine();

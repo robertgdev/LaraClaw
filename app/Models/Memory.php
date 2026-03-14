@@ -16,6 +16,8 @@ use Laravel\Scout\Searchable;
  * - Layer 1: Episodic Memory — timestamped events with outcomes & importance scoring
  * - Layer 2: Semantic Index — FTS5/full-text search with BM25 ranking
  * - Layer 3: Temporal Decay — Ebbinghaus forgetting curve + access frequency strengthening
+ *
+ * @property float $search_score Runtime search score (not persisted)
  */
 class Memory extends Model
 {

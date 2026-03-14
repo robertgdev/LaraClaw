@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Commands;
 
 use App\DTOs\CommandResponseDTO;
+use function Safe\json_decode;
 
 /**
  * Handles JSON messages from the WebSocket web client.
@@ -23,6 +24,8 @@ class WebSocketMessageHandler
 
     /**
      * Handle JSON messages from the web client.
+     *
+     * @param  array<string, mixed>  $context
      */
     public function handle(string $message, array $context = []): CommandResponseDTO
     {
@@ -54,6 +57,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle authentication.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleAuth(array $data, array $context): CommandResponseDTO
     {
@@ -81,6 +87,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle web client message send.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleSendMessage(array $data, array $context): CommandResponseDTO
     {
@@ -106,6 +115,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle sessions list request.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleSessionsList(array $data, array $context): CommandResponseDTO
     {
@@ -120,6 +132,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle session create request.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleSessionCreate(array $data, array $context): CommandResponseDTO
     {
@@ -139,6 +154,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle session rename request.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleSessionRename(array $data, array $context): CommandResponseDTO
     {
@@ -153,6 +171,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle session delete request.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleSessionDelete(array $data, array $context): CommandResponseDTO
     {
@@ -167,6 +188,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle session pin request.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleSessionPin(array $data, array $context): CommandResponseDTO
     {
@@ -181,6 +205,9 @@ class WebSocketMessageHandler
 
     /**
      * Handle history get request.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $context
      */
     protected function handleHistoryGet(array $data, array $context): CommandResponseDTO
     {

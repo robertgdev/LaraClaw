@@ -56,9 +56,9 @@ class ResponseDeliveryStage implements MessagePipelineStage
 
             $this->deliveryService->sendResponse(
                 $context->message,
-                $result['message'],
+                $result->message,
                 $context->agentId,
-                $result['files'],
+                $result->files,
                 $context->agent['name'],
                 $context->agent['provider'] ?? null,
                 $context->agent['model'] ?? null

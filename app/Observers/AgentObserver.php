@@ -40,7 +40,7 @@ final readonly class AgentObserver
     {
         $skills = $this->skillService->getAllSkills();
 
-        return array_keys($skills);
+        return $skills->map(fn ($skill) => $skill->name)->toArray();
     }
 
     /**

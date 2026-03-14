@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\DTOs\ExecuteRequestDTO;
 use App\DTOs\ParsedResponseDTO;
 use App\DTOs\ScriptExecutionResultDTO;
+use App\DTOs\ScriptValidationDTO;
 use App\Logging\MultiLogger;
 use App\Services\ResponseParser\ExecuteBlockDetector;
 use App\Services\ResponseParser\ScriptPathResolver;
+use App\TypedCollections\ExecuteRequestDTOCollection;
+use App\TypedCollections\ScriptValidationDTOCollection;
 
 /**
  * Service for parsing AI responses and executing script commands.
@@ -18,8 +22,8 @@ use App\Services\ResponseParser\ScriptPathResolver;
  * ScriptExecutionService and formats the results.
  *
  * Supported formats:
- * - ```execute: scripts/schedule.sh create --cron "0 9 * * *"```
- * - [execute: scripts/schedule.sh create --cron "0 9 * * *"]
+ * - ```execute: scripts/schedule.sh create --cron"0 9 * * *"```
+ * - [execute: scripts/schedule.sh create --cron"0 9 * * *"]
  */
 class ResponseParserService
 {
@@ -40,278 +44,142 @@ class ResponseParserService
     }
 
     /**
-     * Parse AI response and execute any script requests.
-     *
-     * @param  string  $response  The AI response to parse
-     * @param  string|null  $agentId  The agent context for working directory
-     * @return ParsedResponseDTO The parsed response with execution results
+     * Parse AI response and execute any script commands found.
      */
-    public function parseAndExecute(
-        string $response,
-        ?string $agentId = null
-    ): ParsedResponseDTO {
-        MultiLogger::debug('ResponseParser::parseAndExecute called', [
-            'response_length' => strlen($response),
-            'agent_id' => $agentId,
-            'has_execute_block' => $this->hasExecuteRequests($response),
-        ]);
+    public function parseAndExecute(string $response): ParsedResponseDTO
+    {
+        $finalResponse = trim($response);
+        $executeResults = [];
 
-        $executions = [];
-        $actions = [];
+        // Check if response contains execute blocks
+        if (! $this->detector->hasExecuteBlocks($finalResponse)) {
+            return new ParsedResponseDTO(
+                originalResponse: $response,
+                modifiedResponse: $finalResponse,
+                executions: $executeResults,
+            );
+        }
 
-        $modifiedResponse = $this->detector->replaceAll(
-            $response,
-            function (string $command, string $format) use ($agentId, &$executions, &$actions): string {
-                if ($format === 'bare') {
-                    MultiLogger::info('Detected bare execute request (missing code block formatting)', [
-                        'command' => $command,
-                    ]);
+        // Extract and process execute blocks
+        $blocks = $this->detector->extractAll($finalResponse);
+
+        foreach ($blocks as $block) {
+            $command = $block['command'];
+            $fullMatch = $block['full_match'];
+
+            MultiLogger::debug('Processing execute block', ['command' => $command]);
+
+            // Parse the command
+            $parsed = $this->resolver->parseCommand($command);
+
+            if (! $parsed->script) {
+                MultiLogger::warning('No script found in command', ['command' => $command]);
+
+                continue;
+            }
+
+            // Check if this is a script path or a direct command
+            if ($this->resolver->isScriptPath($parsed->script)) {
+                // Extract skill and script info
+                $scriptInfo = $this->resolver->extractScriptInfo($parsed->script);
+
+                if (! $scriptInfo) {
+                    MultiLogger::warning('Could not resolve script path', ['script' => $parsed->script]);
+
+                    continue;
                 }
 
-                return $this->handleExecuteRequest($command, $agentId, $executions, $actions);
+                // Execute the script
+                $result = $this->scriptExecutor->execute(
+                    $scriptInfo->skill,
+                    $scriptInfo->script,
+                    $parsed->args
+                );
+            } else {
+                // Direct command execution
+                $result = $this->scriptExecutor->executeDirectCommand($command);
             }
-        );
+
+            $executeResults[] = $result;
+
+            // Replace the execute block with the result
+            if ($result->success) {
+                $replacement = $result->output ?: "[Command executed successfully]";
+            } else {
+                $replacement = "[Command execution failed: {$result->error}]";
+            }
+
+            $finalResponse = str_replace($fullMatch, $replacement, $finalResponse);
+        }
 
         return new ParsedResponseDTO(
             originalResponse: $response,
-            modifiedResponse: $modifiedResponse,
-            executions: $executions,
-            actions: $actions
+            modifiedResponse: trim($finalResponse),
+            executions: $executeResults,
         );
     }
 
     /**
-     * Handle a single execute request.
-     *
-     * @param  string  $command  The command string from the AI
-     * @param  string|null  $agentId  The agent context
-     * @param  array  $executions  Reference to executions array
-     * @param  array  $actions  Reference to actions array
-     * @return string The replacement text for the execute block
+     * Check if response contains any execute blocks.
      */
-    protected function handleExecuteRequest(
-        string $command,
-        ?string $agentId,
-        array &$executions,
-        array &$actions
-    ): string {
-        MultiLogger::debug('Processing execute request', ['command' => $command]);
-
-        // Direct command (doesn't start with scripts/)
-        if (! $this->resolver->isScriptPath($command)) {
-            MultiLogger::info('Routing to direct command handler', ['command' => $command]);
-
-            return $this->handleDirectCommand($command, $agentId, $executions, $actions);
-        }
-
-        // Parse the command
-        $parsed = $this->resolver->parseCommand($command);
-
-        if (empty($parsed['script'])) {
-            $executions[] = ScriptExecutionResultDTO::error("Invalid command format: {$command}");
-            $actions[] = [
-                'type' => 'execute',
-                'success' => false,
-                'error' => 'Invalid command format',
-            ];
-
-            return '**Error:** Invalid command format. Expected: `script_path [args...]`';
-        }
-
-        $scriptPath = $parsed['script'];
-        $args = $parsed['args'];
-
-        // Extract skill/script info
-        $scriptInfo = $this->resolver->extractScriptInfo($scriptPath);
-
-        if (! $scriptInfo) {
-            $executions[] = ScriptExecutionResultDTO::error(
-                "Could not determine skill from script path: {$scriptPath}"
-            );
-            $actions[] = [
-                'type' => 'execute',
-                'success' => false,
-                'error' => 'Could not determine skill',
-                'script' => $scriptPath,
-            ];
-
-            return "**Error:** Could not determine skill from script path: `{$scriptPath}`";
-        }
-
-        // Execute the script
-        $result = $this->scriptExecutor->execute(
-            skillName: $scriptInfo['skill'],
-            scriptName: $scriptInfo['script'],
-            args: $args,
-            agentId: $agentId
-        );
-
-        $executions[] = $result;
-        $actions[] = [
-            'type' => 'execute',
-            'success' => $result->success,
-            'skill' => $scriptInfo['skill'],
-            'script' => $scriptInfo['script'],
-            'args' => $args,
-        ];
-
-        MultiLogger::info('Script execution result', [
-            'skill' => $scriptInfo['skill'],
-            'script' => $scriptInfo['script'],
-            'success' => $result->success,
-            'duration' => $result->duration,
-        ]);
-
-        return $this->formatExecutionResult($result, "Script: `{$scriptInfo['script']}`");
-    }
-
-    /**
-     * Handle a direct command execution request.
-     */
-    protected function handleDirectCommand(
-        string $command,
-        ?string $agentId,
-        array &$executions,
-        array &$actions
-    ): string {
-        MultiLogger::debug('Processing direct command', ['command' => $command]);
-
-        $result = $this->scriptExecutor->executeDirectCommand($command);
-
-        $executions[] = $result;
-        $actions[] = [
-            'type' => 'execute_direct',
-            'success' => $result->success,
-            'command' => $command,
-        ];
-
-        MultiLogger::info('Direct command execution result', [
-            'command' => $command,
-            'success' => $result->success,
-            'duration' => $result->duration,
-        ]);
-
-        $displayCommand = strlen($command) > 60
-            ? substr($command, 0, 60).'...'
-            : $command;
-
-        return $this->formatExecutionResult($result, "Command: `{$displayCommand}`");
-    }
-
-    /**
-     * Format an execution result for display.
-     *
-     * Unified formatter used for both script and direct command results.
-     *
-     * @param  ScriptExecutionResultDTO  $result  The execution result
-     * @param  string  $headerLabel  The label for the header (e.g., "Script: `schedule.sh`")
-     * @return string Formatted result string
-     */
-    protected function formatExecutionResult(ScriptExecutionResultDTO $result, string $headerLabel): string
+    public function hasExecuteBlocks(string $response): bool
     {
-        $header = "**{$headerLabel}**";
-
-        if ($result->success) {
-            $output = trim($result->output);
-
-            if (empty($output)) {
-                return "{$header}\n\n✅ Executed successfully (no output)";
-            }
-
-            if (str_contains($output, "\n") || str_contains($output, '`')) {
-                return "{$header}\n\n```\n{$output}\n```";
-            }
-
-            return "{$header}\n\n✅ {$output}";
-        }
-
-        $error = $result->error;
-        $output = trim($result->output);
-
-        $message = "{$header}\n\n❌ **Error:** {$error}";
-
-        if (! empty($output)) {
-            $message .= "\n\n**Output:**\n```\n{$output}\n```";
-        }
-
-        return $message;
-    }
-
-    /**
-     * Check if a response contains any execute requests.
-     */
-    public function hasExecuteRequests(string $response): bool
-    {
-        $hasAny = $this->detector->hasExecuteRequests($response);
-
-        if (! $hasAny) {
-            $details = $this->detector->getDetectionDetails($response);
-            MultiLogger::debug('hasExecuteRequests: no matches found', [
-                'response_preview' => substr($response, 0, 500),
-                ...$details,
-            ]);
-        }
-
-        return $hasAny;
+        return $this->detector->hasExecuteBlocks($response);
     }
 
     /**
      * Extract all execute requests from a response without executing them.
-     *
-     * @return array<int, array{command: string, script: string|null, args: array}>
      */
-    public function extractExecuteRequests(string $response): array
+    public function extractExecuteRequests(string $response): ExecuteRequestDTOCollection
     {
         $blocks = $this->detector->extractAll($response);
         $requests = [];
 
         foreach ($blocks as $block) {
             $parsed = $this->resolver->parseCommand($block['command']);
-            $requests[] = [
-                'command' => $block['command'],
-                'script' => $parsed['script'],
-                'args' => $parsed['args'],
-            ];
+            $requests[] = new ExecuteRequestDTO(
+                command: $block['command'],
+                script: $parsed->script,
+                args: $parsed->args,
+            );
         }
 
-        return $requests;
+        return new ExecuteRequestDTOCollection($requests);
     }
 
     /**
      * Validate all execute requests in a response without executing them.
-     *
-     * @return array<int, array{valid: bool, command: string, error: string|null}>
      */
-    public function validateExecuteRequests(string $response): array
+    public function validateExecuteRequests(string $response): ScriptValidationDTOCollection
     {
         $requests = $this->extractExecuteRequests($response);
         $validations = [];
 
         foreach ($requests as $request) {
-            $scriptInfo = $this->resolver->extractScriptInfo($request['script'] ?? '');
+            $scriptInfo = $this->resolver->extractScriptInfo($request->script ?? '');
 
             if (! $scriptInfo) {
-                $validations[] = [
-                    'valid' => false,
-                    'command' => $request['command'],
-                    'error' => 'Could not determine skill from script path',
-                ];
+                $validations[] = new ScriptValidationDTO(
+                    valid: false,
+                    command: $request->script ?? '',
+                    error: 'Could not determine skill from script path',
+                );
 
                 continue;
             }
 
             $validation = $this->scriptExecutor->validateScript(
-                $scriptInfo['skill'],
-                $scriptInfo['script']
+                $scriptInfo->skill,
+                $scriptInfo->script
             );
 
-            $validations[] = [
-                'valid' => $validation['valid'],
-                'command' => $request['command'],
-                'error' => $validation['error'],
-            ];
+            $validations[] = new ScriptValidationDTO(
+                valid: $validation['valid'],
+                command: $request->script ?? '',
+                error: $validation['error'] ?? null,
+            );
         }
 
-        return $validations;
+        return new ScriptValidationDTOCollection($validations);
     }
 }

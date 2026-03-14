@@ -34,6 +34,7 @@ class ScriptExecutionService
 
     protected SandboxedExecutor $executor;
 
+    /** @var array<string, mixed> */
     protected array $config;
 
     /**
@@ -67,7 +68,7 @@ class ScriptExecutionService
      *
      * @param  string  $skillName  Name of the skill (e.g., 'schedule')
      * @param  string  $scriptName  Script filename (e.g., 'schedule.sh')
-     * @param  array  $args  Arguments to pass to the script
+     * @param  array<int, string>  $args  Arguments to pass to the script
      * @param  string|null  $agentId  Agent context for working directory
      */
     public function execute(
@@ -90,7 +91,7 @@ class ScriptExecutionService
         if (! $skill) {
             MultiLogger::error('Skill not found', [
                 'skill_name' => $skillName,
-                'available_skills' => array_keys($this->skillSearch->getAllSkills()),
+                'available_skills' => $this->skillSearch->getAllSkills()->getNames(),
             ]);
 
             return ScriptExecutionResultDTO::error(
@@ -106,8 +107,8 @@ class ScriptExecutionService
             MultiLogger::error('Script not found in skill', [
                 'script_name' => $scriptName,
                 'skill_name' => $skillName,
-                'skill_directory' => $skill['directory'] ?? 'unknown',
-                'scripts_dir' => ($skill['directory'] ?? '').'/scripts',
+                'skill_directory' => $skill->directory,
+                'scripts_dir' => $skill->directory.'/scripts',
             ]);
 
             return ScriptExecutionResultDTO::error(
@@ -166,7 +167,7 @@ class ScriptExecutionService
      * @param  string  $command  The full command to execute
      * @param  string|null  $workingDir  Working directory for execution
      * @param  string|null  $scriptPath  Path to the script (for logging)
-     * @param  array  $args  Arguments passed (for logging)
+     * @param  array<int, string>  $args  Arguments passed (for logging)
      */
     public function executeCommand(
         string $command,

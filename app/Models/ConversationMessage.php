@@ -97,9 +97,12 @@ class ConversationMessage extends Model
 
     /**
      * Get replies to this message.
+     *
+     * @return HasMany<ConversationMessage, ConversationMessage>
      */
     public function replies(): HasMany
     {
+        /** @var HasMany<ConversationMessage, ConversationMessage> */
         return $this->hasMany(ConversationMessage::class, 'reply_to', 'id');
     }
 
@@ -264,9 +267,10 @@ class ConversationMessage extends Model
      *     conversation_id: string,
      *     channel: ChannelEnum,
      *     sender: string,
-     *     sender_id: string,
+     *     sender_id: string|null,
      *     message: string,
-     *     fullMessage: string
+     *     fullMessage?: string,
+     *     agent_id?: string
      * } $data
      */
     public static function createIncoming(array $data): self
@@ -285,13 +289,16 @@ class ConversationMessage extends Model
      *      conversation_id: string,
      *      channel: ChannelEnum,
      *      sender: string,
-     *      sender_id: string,
+     *      sender_id: string|null,
      *      message: string,
-     *      agent_id: string,
-     *      provider: string,
-     *      model: string,
-     *      status: MessageStatusEnum,
-     *      processed_at: string
+     *      agent_id: string|null,
+     *      provider?: string|null,
+     *      model?: string|null,
+     *      files?: array<int, string>|null,
+     *      is_llm?: bool,
+     *      reply_to?: int|null,
+     *      status?: MessageStatusEnum,
+     *      processed_at?: string|null
      *  } $data
      */
     public static function createOutgoing(array $data): self
@@ -311,15 +318,15 @@ class ConversationMessage extends Model
      * Convert to array format
      *
      * @return array{
-     *       channel: ChannelEnum,
+     *       channel: string,
      *       sender: string,
-     *       sender_id: string,
+     *       senderId: string|null,
      *       message: string,
-     *       timestamp: string,
-     *       message_id: string,
-     *       agent: string,
-     *       files: array<string>,
-     *       conversation_id: string,
+     *       timestamp: int,
+     *       messageId: string,
+     *       agent: string|null,
+     *       files: array<int, string>|null,
+     *       conversationId: string,
      *       direction: string,
      *       isInternal: bool,
      *   }
@@ -345,16 +352,16 @@ class ConversationMessage extends Model
      * Convert to response data format.
      *
      * @return array{
-     *        channel: ChannelEnum,
+     *        channel: string,
      *        sender: string,
-     *        sender_id: string,
+     *        senderId: string|null,
      *        message: string,
-     *        timestamp: string,
-     *        message_id: string,
-     *        agent: string,
-     *        files: array<string>,
-     *        provider: string,
-     *        model: string,
+     *        timestamp: int,
+     *        messageId: string,
+     *        agent: string|null,
+     *        files: array<int, string>|null,
+     *        provider: string|null,
+     *        model: string|null,
      *    }
      */
     public function toResponseData(): array

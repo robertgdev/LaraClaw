@@ -38,6 +38,8 @@ class SkillMatchRepository
 
     /**
      * Find a cache entry by keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public function findByKeywords(array $keywords): ?SkillMatch
     {
@@ -48,6 +50,8 @@ class SkillMatchRepository
 
     /**
      * Find similar entries by keyword overlap.
+     *
+     * @param  array<int, string>  $keywords
      */
     public function findSimilar(array $keywords, float $minConfidence = 0.7): ?SkillMatch
     {
@@ -66,6 +70,10 @@ class SkillMatchRepository
 
     /**
      * Store a new cache entry or update existing.
+     *
+     * @param  array<int, string>  $keywords
+     * @param  array<string, mixed>  $entities
+     * @param  array<string, mixed>  $metadata
      */
     public function storeMatch(
         array $keywords,
@@ -101,6 +109,10 @@ class SkillMatchRepository
 
     /**
      * Store a match by skill name (convenience method).
+     *
+     * @param  array<int, string>  $keywords
+     * @param  array<string, mixed>  $entities
+     * @param  array<string, mixed>  $metadata
      *
      * @throws \InvalidArgumentException If skill not found
      */
@@ -159,6 +171,8 @@ class SkillMatchRepository
 
     /**
      * Generate a signature from keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public function generateSignature(array $keywords): string
     {

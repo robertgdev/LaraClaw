@@ -3,9 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use App\Models\ConversationMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+use function Safe\json_encode;
+use function Safe\ob_flush;
 
 class ChatController extends Controller
 {
@@ -18,7 +23,8 @@ class ChatController extends Controller
             ->orderBy('updated_at', 'desc')
             ->get();
 
-        $sessions = $conversations->map(function ($conv) {
+        $sessions = $conversations->map(function (Conversation $conv): array {
+            /** @var ConversationMessage|null $lastMessage */
             $lastMessage = $conv->messages()
                 ->orderBy('created_at', 'desc')
                 ->first();
@@ -95,7 +101,8 @@ class ChatController extends Controller
             ->limit($limit)
             ->get();
 
-        $formattedMessages = $messages->map(function ($msg) {
+        /** @var \Illuminate\Support\Collection<int, ConversationMessage> $messages */
+        $formattedMessages = $messages->map(function (ConversationMessage $msg): array {
             return [
                 'id' => $msg->id,
                 'role' => $msg->direction === 'incoming' ? 'user' : 'assistant',
@@ -224,18 +231,19 @@ class ChatController extends Controller
     /**
      * Stream endpoint for real-time updates (SSE placeholder)
      */
-    public function stream(Request $request)
+    public function stream(Request $request): StreamedResponse
     {
         $sessionKey = $request->query('sessionKey');
         $friendlyId = $request->query('friendlyId');
 
         // Set up SSE headers
-        return response()->stream(function () {
+        return response()->stream(function (): void {
             // Send initial connection message
             echo 'data: '.json_encode(['event' => 'connected'])."\n\n";
             echo "\n\n";
 
             // Keep connection alive
+            // @phpstan-ignore while.alwaysTrue (intentional infinite loop for SSE heartbeat)
             while (true) {
                 echo ": heartbeat\n\n";
                 ob_flush();
@@ -265,6 +273,7 @@ class ChatController extends Controller
      */
     private function deriveTitle(Conversation $conversation): string
     {
+        /** @var ConversationMessage|null $firstMessage */
         $firstMessage = $conversation->messages()
             ->where('direction', 'incoming')
             ->orderBy('created_at', 'asc')

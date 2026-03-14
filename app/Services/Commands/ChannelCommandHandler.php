@@ -6,6 +6,8 @@ namespace App\Services\Commands;
 
 use App\DTOs\CommandResponseDTO;
 use App\Logging\MultiLogger;
+use function Safe\preg_match;
+use function Safe\preg_split;
 
 /**
  * Handles channel-specific commands for Discord, Telegram, WhatsApp, etc.

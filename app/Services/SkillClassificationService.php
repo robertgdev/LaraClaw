@@ -44,6 +44,8 @@ class SkillClassificationService
 
     /**
      * Fast/cheap models for classification tasks per provider.
+     *
+     * @var array<string, string>
      */
     protected array $fastModels = [
         'groq' => 'llama-3.3-70b-versatile',
@@ -79,7 +81,6 @@ class SkillClassificationService
      * @param  bool  $clearExisting  Whether to clear existing mappings before classification
      * @param  callable|null  $progressCallback  Callback called after each skill:
      *                                           fn(string $skillName, int $mappingsCount, int $total, int $current, string $status) => void
-     * @return array{skills_processed: int, skills_skipped: int, mappings_generated: int, mappings_stored: int, errors: array}
      */
     public function classifyAllSkills(bool $clearExisting = false, ?callable $progressCallback = null): SkillClassificationResultDTO
     {
@@ -101,7 +102,7 @@ class SkillClassificationService
         $indexedSkills = $this->skillService->indexSkills();
         $syncStats = Skill::syncFromIndex($indexedSkills);
 
-        MultiLogger::info('Synced skills from filesystem', $syncStats);
+        MultiLogger::info('Synced skills from filesystem', $syncStats->toArray());
 
         if (empty($indexedSkills)) {
             MultiLogger::warning('No skills found to classify');
@@ -276,8 +277,6 @@ class SkillClassificationService
 
     /**
      * Get statistics about the current skill match cache.
-     *
-     * @return array{total_entries: int, total_hits: int, skills_covered: int}
      */
     public function getCacheStatistics(): CacheStatsDTO
     {

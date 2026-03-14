@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace App\Services\Chat;
 
 use App\Models\Agent;
+use App\Models\Conversation;
 use App\Services\SettingsService;
 use Illuminate\Console\OutputStyle;
+use Illuminate\Support\Collection;
+
+use function Safe\preg_replace;
 
 /**
  * Renders CLI shell UI elements for the interactive chat.
@@ -233,8 +237,10 @@ class ChatShellRenderer
 
     /**
      * Display list of sessions.
+     *
+     * @param  Collection<int, Conversation>  $sessions
      */
-    public function listSessions(OutputStyle $output, \Illuminate\Support\Collection $sessions): void
+    public function listSessions(OutputStyle $output, Collection $sessions): void
     {
         $output->newLine();
         $output->writeln('<fg=cyan>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</>');

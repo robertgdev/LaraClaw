@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Memory;
 
+use App\DTOs\MemoryConsolidationDTO;
 use App\Enums\ChannelEnum;
 use App\Models\Memory;
 
@@ -24,16 +25,14 @@ class MemoryConsolidator
 
     /**
      * Run all consolidation operations.
-     *
-     * @return array{decayed: int, pruned: int, merged: int}
      */
-    public function consolidate(string $senderId, ChannelEnum $channel): array
+    public function consolidate(string $senderId, ChannelEnum $channel): MemoryConsolidationDTO
     {
-        return [
-            'decayed' => $this->decayImportance($senderId, $channel),
-            'pruned' => $this->pruneLowValue($senderId, $channel),
-            'merged' => $this->mergeDuplicates($senderId, $channel),
-        ];
+        return new MemoryConsolidationDTO(
+            decayed: $this->decayImportance($senderId, $channel),
+            pruned: $this->pruneLowValue($senderId, $channel),
+            merged: $this->mergeDuplicates($senderId, $channel),
+        );
     }
 
     /**

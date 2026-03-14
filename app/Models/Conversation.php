@@ -153,6 +153,8 @@ class Conversation extends Model
 
     /**
      * Create a new conversation with metadata.
+     *
+     * @param  array<string, mixed>  $data
      */
     public static function createNew(array $data): self
     {
@@ -214,6 +216,8 @@ class Conversation extends Model
     /**
      * Start a new session for a sender.
      * Deactivates all other sessions for this sender+channel.
+     *
+     * @param  array<string, mixed>  $data
      */
     public static function startNewSession(array $data): self
     {
@@ -238,6 +242,8 @@ class Conversation extends Model
 
     /**
      * Get all sessions for a sender+channel.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, self>
      */
     public static function getSessionsForSender(string $senderId, ChannelEnum $channel, int $limit = 50)
     {
@@ -304,12 +310,14 @@ class Conversation extends Model
 
     /**
      * Add a user message to this conversation.
+     *
+     * @param  array<int, string>  $files
      */
     public function addUserMessage(string $message, string $sender = 'user', ?string $senderId = null, array $files = []): ConversationMessage
     {
         \Log::debug('[Conversation::addUserMessage] Creating message', [
             'conversation_id' => $this->conversation_id,
-            'channel' => $this->channel?->value,
+            'channel' => $this->channel->value,
             'sender' => $sender,
             'sender_id' => $senderId,
         ]);
@@ -361,14 +369,18 @@ class Conversation extends Model
      */
     public function getFirstUserMessage(): ?ConversationMessage
     {
+        /** @var ConversationMessage|null */
         return $this->incomingMessages()->orderBy('created_at')->first();
     }
 
     /**
      * Get all agent responses.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, ConversationMessage>
      */
-    public function getAgentResponses()
+    public function getAgentResponses(): \Illuminate\Database\Eloquent\Collection
     {
+        /** @var \Illuminate\Database\Eloquent\Collection<int, ConversationMessage> */
         return $this->outgoingMessages()->orderBy('created_at')->get();
     }
 
@@ -411,7 +423,7 @@ class Conversation extends Model
      * @param  string  $query  Search query
      * @param  int  $limit  Maximum results
      * @param  string|null  $teamId  Optional team filter
-     * @return \Illuminate\Database\Eloquent\Builder|\Laravel\Scout\Builder
+     * @return \Illuminate\Database\Eloquent\Builder<self>|\Laravel\Scout\Builder<self>
      */
     public static function searchConversations(string $query, int $limit = 20, ?string $teamId = null)
     {

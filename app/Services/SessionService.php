@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\DTOs\SessionHistoryEntryDTO;
+use App\DTOs\SessionIntentResultDTO;
 use App\Enums\ChannelEnum;
 use App\Logging\MultiLogger;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
+use App\TypedCollections\SessionHistoryEntryDTOCollection;
 use Illuminate\Support\Collection;
 use function Safe\preg_match;
 
@@ -22,8 +25,10 @@ class SessionService
 {
     /**
      * Session-related intents that should be handled before agent routing.
+     *
+     * @var array<string>
      */
-    public const array SESSION_INTENTS = [
+    public const SESSION_INTENTS = [
         'new_session',
         'show_sessions',
         'switch_session',
@@ -241,8 +246,6 @@ class SessionService
 
     /**
      * Handle a session intent and return the response.
-     *
-     * @return array{handled: bool, response: ?string, session: ?Conversation}
      */
     public function handleSessionIntent(
         string $intent,
@@ -250,46 +253,46 @@ class SessionService
         ChannelEnum $channel,
         string $senderId,
         string $sender = 'user'
-    ): array {
+    ): SessionIntentResultDTO {
         switch ($intent) {
             case 'new_session':
                 $session = $this->createSession($channel, $senderId, $sender);
 
-                return [
-                    'handled' => true,
-                    'response' => 'Started new session. What would you like to discuss?',
-                    'session' => $session,
-                ];
+                return new SessionIntentResultDTO(
+                    handled: true,
+                    response: 'Started new session. What would you like to discuss?',
+                    session: $session,
+                );
 
             case 'show_sessions':
                 $sessions = $this->getSessions($channel, $senderId);
 
-                return [
-                    'handled' => true,
-                    'response' => $this->formatSessionList($sessions),
-                    'session' => null,
-                ];
+                return new SessionIntentResultDTO(
+                    handled: true,
+                    response: $this->formatSessionList($sessions),
+                    session: null,
+                );
 
             case 'switch_session':
                 $sessionNumber = (int) trim($message) - 1;
                 $sessions = $this->getSessions($channel, $senderId);
 
                 if (! isset($sessions[$sessionNumber])) {
-                    return [
-                        'handled' => true,
-                        'response' => "Invalid session number. Type 'show sessions' to see available sessions.",
-                        'session' => null,
-                    ];
+                    return new SessionIntentResultDTO(
+                        handled: true,
+                        response: "Invalid session number. Type 'show sessions' to see available sessions.",
+                        session: null,
+                    );
                 }
 
                 $targetSession = $sessions[$sessionNumber];
                 $targetSession->activate();
 
-                return [
-                    'handled' => true,
-                    'response' => "Switched to: {$targetSession->getDisplayTitle()}",
-                    'session' => $targetSession,
-                ];
+                return new SessionIntentResultDTO(
+                    handled: true,
+                    response: "Switched to: {$targetSession->getDisplayTitle()}",
+                    session: $targetSession,
+                );
 
             case 'rename_session':
                 if (preg_match('/^rename\s+(session\s+)?(.+?)\s+to\s+(.+)$/i', $message, $matches)) {
@@ -297,11 +300,11 @@ class SessionService
                     $activeSession = $this->getOrCreateActiveSession($channel, $senderId, $sender);
                     $activeSession->rename($newLabel);
 
-                    return [
-                        'handled' => true,
-                        'response' => "Session renamed to: {$newLabel}",
-                        'session' => $activeSession,
-                    ];
+                    return new SessionIntentResultDTO(
+                        handled: true,
+                        response: "Session renamed to: {$newLabel}",
+                        session: $activeSession,
+                    );
                 }
                 break;
 
@@ -312,11 +315,11 @@ class SessionService
                     $sessions = $this->getSessions($channel, $senderId);
 
                     if (! isset($sessions[$sessionNumber])) {
-                        return [
-                            'handled' => true,
-                            'response' => 'Invalid session number.',
-                            'session' => null,
-                        ];
+                        return new SessionIntentResultDTO(
+                            handled: true,
+                            response: 'Invalid session number.',
+                            session: null,
+                        );
                     }
 
                     $targetSession = $sessions[$sessionNumber];
@@ -329,11 +332,11 @@ class SessionService
 
                     $status = $action === 'pin' ? 'pinned' : 'unpinned';
 
-                    return [
-                        'handled' => true,
-                        'response' => "Session {$status}: {$targetSession->getDisplayTitle()}",
-                        'session' => null,
-                    ];
+                    return new SessionIntentResultDTO(
+                        handled: true,
+                        response: "Session {$status}: {$targetSession->getDisplayTitle()}",
+                        session: null,
+                    );
                 }
                 break;
 
@@ -343,39 +346,37 @@ class SessionService
                     $sessions = $this->getSessions($channel, $senderId);
 
                     if (! isset($sessions[$sessionNumber])) {
-                        return [
-                            'handled' => true,
-                            'response' => 'Invalid session number.',
-                            'session' => null,
-                        ];
+                        return new SessionIntentResultDTO(
+                            handled: true,
+                            response: 'Invalid session number.',
+                            session: null,
+                        );
                     }
 
                     $targetSession = $sessions[$sessionNumber];
                     $title = $targetSession->getDisplayTitle();
                     $targetSession->delete();
 
-                    return [
-                        'handled' => true,
-                        'response' => "Session deleted: {$title}",
-                        'session' => null,
-                    ];
+                    return new SessionIntentResultDTO(
+                        handled: true,
+                        response: "Session deleted: {$title}",
+                        session: null,
+                    );
                 }
                 break;
         }
 
-        return [
-            'handled' => false,
-            'response' => null,
-            'session' => null,
-        ];
+        return new SessionIntentResultDTO(
+            handled: false,
+            response: null,
+            session: null,
+        );
     }
 
     /**
      * Get session history for context.
-     *
-     * @return array<int, array{role: string, content: string}>
      */
-    public function getSessionHistory(string $conversationId, int $limit = 50): array
+    public function getSessionHistory(string $conversationId, int $limit = 50): SessionHistoryEntryDTOCollection
     {
         $messages = ConversationMessage::where('conversation_id', $conversationId)
             ->orderBy('created_at', 'asc')
@@ -384,12 +385,12 @@ class SessionService
 
         $history = [];
         foreach ($messages as $message) {
-            $history[] = [
-                'role' => $message->direction === 'incoming' ? 'user' : 'assistant',
-                'content' => $message->message,
-            ];
+            $history[] = new SessionHistoryEntryDTO(
+                role: $message->direction === 'incoming' ? 'user' : 'assistant',
+                content: $message->message,
+            );
         }
 
-        return $history;
+        return new SessionHistoryEntryDTOCollection($history);
     }
 }

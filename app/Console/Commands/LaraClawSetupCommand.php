@@ -269,18 +269,18 @@ class LaraClawSetupCommand extends Command
         $initializer = new SetupWorkspaceInitializer;
         $result = $initializer->copyTemplateFilesToStorage($this->config['workspace_name']);
 
-        foreach ($result['messages'] as $message) {
+        foreach ($result->messages as $message) {
             $this->line("  <fg=green>✓</> {$message}");
         }
 
         $workspaceName = $this->config['workspace_name'];
         $this->newLine();
-        if ($result['copied'] > 0) {
+        if ($result->copied > 0) {
             $this->line("<fg=green>  ✓ Template files copied to storage/app/$workspaceName</>");
             $this->line('  <fg=gray>You can customize these files without losing changes on update.</>');
         }
-        if ($result['skipped'] > 0) {
-            $this->line("  <fg=gray>Skipped {$result['skipped']} existing file(s) - your customizations preserved.</>");
+        if ($result->skipped > 0) {
+            $this->line("  <fg=gray>Skipped {$result->skipped} existing file(s) - your customizations preserved.</>");
         }
 
         // Create symlink
@@ -297,11 +297,11 @@ class LaraClawSetupCommand extends Command
         $initializer = new SetupWorkspaceInitializer;
         $result = $initializer->createAgentsSymlink($this->config['workspace_name']);
 
-        if ($result['created']) {
-            $this->line("<fg=green>  ✓ {$result['message']}</>");
+        if ($result->created) {
+            $this->line("<fg=green>  ✓ {$result->message}</>");
             $this->line('  <fg=gray>Skills are now accessible from the Laravel root directory.</>');
         } else {
-            $this->line("  <fg=gray>{$result['message']}</>");
+            $this->line("  <fg=gray>{$result->message}</>");
         }
     }
 
@@ -415,7 +415,7 @@ class LaraClawSetupCommand extends Command
         $changes['LARACLAW_WORKSPACE_PATH'] = $this->config['workspace_path'];
 
         // Daemon API Token
-        $existingToken = env('LARACLAW_SERVER_API_KEY');
+        $existingToken = config('laraclaw.server_api_key');
         if ($this->option('reset') || empty($existingToken)) {
             $envWriter = new SetupEnvWriter;
             $changes['LARACLAW_SERVER_API_KEY'] = $envWriter->generateApiToken();
@@ -423,7 +423,7 @@ class LaraClawSetupCommand extends Command
         }
 
         // REST API Token
-        $existingRestToken = env('LARACLAW_REST_API_KEY');
+        $existingRestToken = config('laraclaw.rest_api_key');
         if ($this->option('reset') || empty($existingRestToken)) {
             $envWriter = new SetupEnvWriter;
             $changes['LARACLAW_REST_API_KEY'] = $envWriter->generateApiToken();
@@ -449,13 +449,13 @@ class LaraClawSetupCommand extends Command
     protected function createDirectories(): void
     {
         $initializer = new SetupWorkspaceInitializer;
-        $messages = $initializer->createDirectories(
+        $result = $initializer->createDirectories(
             $this->config['workspace_path'],
             $this->config['default_agent_id'],
             $this->config['additional_agents']
         );
 
-        foreach ($messages as $message) {
+        foreach ($result->messages as $message) {
             $this->line("<fg=green>  \u{2713} {$message}</>");
         }
     }

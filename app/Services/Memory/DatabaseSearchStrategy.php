@@ -24,7 +24,7 @@ class DatabaseSearchStrategy implements SearchStrategyInterface
     /**
      * Search episodic memories using native database features.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     public function search(
         string $senderId,
@@ -65,7 +65,7 @@ class DatabaseSearchStrategy implements SearchStrategyInterface
      *
      * Requires FULLTEXT index on (content, outcome) columns.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     private function searchMySQL(string $senderId, ChannelEnum $channel, string $query, int $limit): Collection
     {
@@ -92,7 +92,7 @@ class DatabaseSearchStrategy implements SearchStrategyInterface
     /**
      * Search using PostgreSQL full-text search.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     private function searchPostgres(string $senderId, ChannelEnum $channel, string $query, int $limit): Collection
     {
@@ -121,7 +121,7 @@ class DatabaseSearchStrategy implements SearchStrategyInterface
      * Note: This requires a separate FTS5 virtual table to be created.
      * Falls back to LIKE if not available.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     private function searchSQLite(string $senderId, ChannelEnum $channel, string $query, int $limit): Collection
     {
@@ -165,7 +165,7 @@ class DatabaseSearchStrategy implements SearchStrategyInterface
     /**
      * Search using LIKE queries (fallback for all databases).
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     private function searchLike(string $senderId, ChannelEnum $channel, string $query, int $limit): Collection
     {
@@ -193,8 +193,8 @@ class DatabaseSearchStrategy implements SearchStrategyInterface
     /**
      * Normalize scores across results.
      *
-     * @param  Collection<\App\Models\Memory>  $results
-     * @return Collection<\App\Models\Memory>
+     * @param  Collection<int, \App\Models\Memory>  $results
+     * @return Collection<int, \App\Models\Memory>
      */
     private function normalizeScores(Collection $results, string $query): Collection
     {

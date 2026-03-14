@@ -6,6 +6,8 @@ namespace App\Services\Shell;
 
 use Illuminate\Support\Facades\File;
 
+use function Safe\readline_read_history;
+
 /**
  * Manages shell command history with readline integration.
  *
@@ -14,6 +16,7 @@ use Illuminate\Support\Facades\File;
  */
 class ShellHistoryManager
 {
+    /** @var array<int, string> */
     protected array $history = [];
 
     protected int $historyIndex = 0;
@@ -42,7 +45,11 @@ class ShellHistoryManager
 
             // Load into readline if available
             if (function_exists('readline_read_history')) {
-                readline_read_history($this->historyFile);
+                try {
+                    readline_read_history($this->historyFile);
+                } catch (\Throwable $e) {
+                    // Ignore readline errors - not critical for functionality
+                }
             }
         }
     }

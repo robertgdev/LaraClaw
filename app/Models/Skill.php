@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\DTOs\SkillClassificationStatsDTO;
+use App\DTOs\SkillFileDTO;
+use App\DTOs\SkillSyncResultDTO;
 use App\Services\Skills\SkillChecksumCalculator;
 use App\Services\Skills\SkillSyncService;
+use App\TypedCollections\SkillFileDTOCollection;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -56,8 +58,6 @@ use Illuminate\Support\Facades\File;
  */
 class Skill extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'name',
         'dir_name',
@@ -218,6 +218,8 @@ class Skill extends Model
 
     /**
      * Find or create a skill from indexed data.
+     *
+     * @param  array<string, mixed>  $skillData
      */
     public static function findOrCreateFromIndex(array $skillData, string $checksum): self
     {
@@ -268,10 +270,9 @@ class Skill extends Model
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array  $indexedSkills  Skills from SkillSearchService::indexSkills()
-     * @return array{created: int, updated: int, deactivated: int}
+     * @param  array<string, mixed>  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
-    public static function syncFromIndex(array $indexedSkills): array
+    public static function syncFromIndex(array $indexedSkills): SkillSyncResultDTO
     {
         /** @var SkillSyncService $syncService */
         $syncService = app(SkillSyncService::class);
@@ -281,6 +282,8 @@ class Skill extends Model
 
     /**
      * Get skills that need classification (checksum changed or never classified).
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, self>
      */
     public static function getSkillsNeedingClassification(): \Illuminate\Database\Eloquent\Collection
     {
@@ -389,47 +392,51 @@ class Skill extends Model
     /**
      * Get reference files for this skill.
      */
-    public function getReferences(): array
+    public function getReferences(): SkillFileDTOCollection
     {
         if (! $this->has_references) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $refDir = $this->path.'/references';
 
         if (! File::isDirectory($refDir)) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $files = File::files($refDir);
 
-        return array_map(fn ($f) => [
-            'name' => $f->getFilename(),
-            'path' => $f->getPathname(),
-        ], $files);
+        $dtos = array_map(fn ($f) => new SkillFileDTO(
+            name: $f->getFilename(),
+            path: $f->getPathname(),
+        ), $files);
+
+        return new SkillFileDTOCollection($dtos);
     }
 
     /**
      * Get scripts for this skill.
      */
-    public function getScripts(): array
+    public function getScripts(): SkillFileDTOCollection
     {
         if (! $this->has_scripts) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $scriptsDir = $this->path.'/scripts';
 
         if (! File::isDirectory($scriptsDir)) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $files = File::files($scriptsDir);
 
-        return array_map(fn ($f) => [
-            'name' => $f->getFilename(),
-            'path' => $f->getPathname(),
-        ], $files);
+        $dtos = array_map(fn ($f) => new SkillFileDTO(
+            name: $f->getFilename(),
+            path: $f->getPathname(),
+        ), $files);
+
+        return new SkillFileDTOCollection($dtos);
     }
 
     /**

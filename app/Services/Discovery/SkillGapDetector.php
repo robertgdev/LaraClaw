@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Discovery;
 
 use App\DTOs\IntentClassificationDTO;
+use function Safe\preg_match;
+use function Safe\preg_split;
+use function Safe\preg_replace;
 
 /**
  * Detects skill gaps by analysing user intent and message content.

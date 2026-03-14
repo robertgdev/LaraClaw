@@ -66,6 +66,8 @@ class HorizonConfigService
      * Get Horizon supervisor configuration based on strategy.
      *
      * Returns an array suitable for config/horizon.php environments.
+     *
+     * @return array<string, array{connection: string, queue: array<int, string>, balance: string, maxProcesses?: int, minProcesses?: int, processes?: int, tries: int, timeout: int, retryAfter: int}>
      */
     public function getSupervisorConfig(): array
     {
@@ -90,6 +92,8 @@ class HorizonConfigService
 
     /**
      * Get supervisor config for single queue strategy.
+     *
+     * @return array<string, array{connection: string, queue: array<int, string>, balance: string, maxProcesses: int, minProcesses: int, tries: int, timeout: int, retryAfter: int}>
      */
     protected function getSingleQueueSupervisor(string $connection): array
     {
@@ -113,6 +117,8 @@ class HorizonConfigService
      * Get supervisor configs for per-agent strategy.
      *
      * Each agent gets its own supervisor with 1 process for ordering guarantee.
+     *
+     * @return array<string, array{connection: string, queue: array<int, string>, balance: string, processes: int, tries: int, timeout: int, retryAfter: int}>
      */
     protected function getPerAgentSupervisors(string $connection): array
     {
@@ -141,6 +147,8 @@ class HorizonConfigService
      *
      * Agents are grouped by priority tier. Each agent still gets 1 process
      * for ordering guarantee, but supervisors are organized by tier.
+     *
+     * @return array<string, array{connection: string, queue: array<int, string>, balance: string, maxProcesses?: int, minProcesses?: int, processes?: int, tries: int, timeout: int, retryAfter: int}>
      */
     protected function getPrioritySupervisors(string $connection): array
     {

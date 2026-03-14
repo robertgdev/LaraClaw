@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Memory;
 
+use function Safe\preg_replace;
+use function Safe\preg_split;
+
 /**
  * Scores memory relevance using hybrid ranking.
  *

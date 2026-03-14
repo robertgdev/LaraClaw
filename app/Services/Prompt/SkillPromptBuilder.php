@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Prompt;
 
+use App\DTOs\SkillDTO;
+use App\TypedCollections\SkillDTOCollection;
 use App\Services\SkillSearchService;
 use Illuminate\Support\Facades\File;
 
@@ -52,7 +54,7 @@ class SkillPromptBuilder
         }
 
         $skills = $this->skillService->getAllSkills();
-        if (empty($skills)) {
+        if ($skills->isEmpty()) {
             return null;
         }
 
@@ -106,25 +108,25 @@ class SkillPromptBuilder
     /**
      * Generate the markdown list of available skills.
      */
-    public function generateSkillsList(array $skills): string
+    public function generateSkillsList(SkillDTOCollection $skills): string
     {
         $lines = [];
 
-        foreach ($skills as $skillName => $skill) {
-            $description = $skill['description'] ?? 'No description available';
-            $hasScripts = $skill['has_scripts'] ?? false;
+        foreach ($skills as $skill) {
+            $description = $skill->description ?: 'No description available';
+            $hasScripts = $skill->hasScripts;
 
-            $lines[] = "### {$skillName}";
+            $lines[] = "### {$skill->name}";
             $lines[] = '';
             $lines[] = $description;
 
             if ($hasScripts && $this->skillService) {
-                $scripts = $this->skillService->getSkillScripts($skillName);
-                if (! empty($scripts)) {
+                $scripts = $this->skillService->getSkillScripts($skill->name);
+                if ($scripts->isNotEmpty()) {
                     $lines[] = '';
                     $lines[] = '**Available scripts:**';
                     foreach ($scripts as $script) {
-                        $lines[] = "- `scripts/{$script['name']}`";
+                        $lines[] = "- `scripts/{$script->name}`";
                     }
                 }
             } else {
@@ -140,7 +142,7 @@ class SkillPromptBuilder
     /**
      * Fallback method for building skills section when template is not available.
      */
-    protected function buildHardcoded(array $skills): string
+    protected function buildHardcoded(SkillDTOCollection $skills): string
     {
         $lines = [
             '# Available Skills',
@@ -186,21 +188,21 @@ class SkillPromptBuilder
             '',
         ];
 
-        foreach ($skills as $skillName => $skill) {
-            $description = $skill['description'] ?? 'No description available';
-            $hasScripts = $skill['has_scripts'] ?? false;
+        foreach ($skills as $skill) {
+            $description = $skill->description ?: 'No description available';
+            $hasScripts = $skill->hasScripts;
 
-            $lines[] = "### {$skillName}";
+            $lines[] = "### {$skill->name}";
             $lines[] = '';
             $lines[] = $description;
 
             if ($hasScripts && $this->skillService) {
-                $scripts = $this->skillService->getSkillScripts($skillName);
-                if (! empty($scripts)) {
+                $scripts = $this->skillService->getSkillScripts($skill->name);
+                if ($scripts->isNotEmpty()) {
                     $lines[] = '';
                     $lines[] = '**Available scripts:**';
                     foreach ($scripts as $script) {
-                        $lines[] = "- `scripts/{$script['name']}`";
+                        $lines[] = "- `scripts/{$script->name}`";
                     }
                 }
             } else {

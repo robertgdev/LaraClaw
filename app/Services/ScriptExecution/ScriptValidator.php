@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\ScriptExecution;
 
+use App\DTOs\SkillDTO;
 use App\Services\SkillSearchService;
 use Illuminate\Support\Facades\File;
+
+use function Safe\realpath;
 
 /**
  * Validates scripts before execution.
@@ -17,10 +20,15 @@ class ScriptValidator
 {
     protected SkillSearchService $skillSearch;
 
+    /** @var array<int, string> */
     protected array $defaultAllowedExtensions = ['sh', 'py', 'ts', 'js'];
 
+    /** @var array<int, string> */
     protected array $allowedExtensions;
 
+    /**
+     * @param  array<int, string>|null  $configAllowedExtensions
+     */
     public function __construct(SkillSearchService $skillSearch, ?array $configAllowedExtensions = null)
     {
         $this->skillSearch = $skillSearch;
@@ -30,18 +38,19 @@ class ScriptValidator
     /**
      * Resolve the full path to a script.
      *
-     * @param  array  $skill  The skill data from SkillSearchService
+     * @param  SkillDTO|array<string, mixed>  $skill  The skill data from SkillSearchService
      * @param  string  $scriptName  The script filename
      * @return string|null The full path or null if not found
      */
-    public function resolveScriptPath(array $skill, string $scriptName): ?string
+    public function resolveScriptPath(SkillDTO|array $skill, string $scriptName): ?string
     {
         // Security: Prevent directory traversal
         if (str_contains($scriptName, '..') || str_contains($scriptName, '/')) {
             return null;
         }
 
-        $scriptsDir = $skill['directory'].'/scripts';
+        $directory = $skill instanceof SkillDTO ? $skill->directory : $skill['directory'];
+        $scriptsDir = $directory.'/scripts';
         $scriptPath = $scriptsDir.'/'.$scriptName;
 
         if (! File::exists($scriptPath)) {

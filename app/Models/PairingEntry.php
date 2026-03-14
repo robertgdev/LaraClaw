@@ -197,7 +197,7 @@ class PairingEntry extends Model
      *
      * @return array{
      *     approved: bool,
-     *     code: string,
+     *     code: string|null,
      *     isNewPending: bool
      * }
      */
@@ -215,7 +215,11 @@ class PairingEntry extends Model
                 $approved->update(['sender' => $sender]);
             }
 
-            return ['approved' => true];
+            return [
+                'approved' => true,
+                'code' => null,
+                'isNewPending' => false,
+            ];
         }
 
         // Find or create pending entry

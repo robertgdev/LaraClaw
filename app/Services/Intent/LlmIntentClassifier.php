@@ -44,7 +44,7 @@ class LlmIntentClassifier
             foreach ($skills as $name => $skill) {
                 $availableSkills[$name] = [
                     'name' => $name,
-                    'description' => substr($skill['description'], 0, 200),
+                    'description' => substr($skill->description, 0, 200),
                 ];
             }
         }

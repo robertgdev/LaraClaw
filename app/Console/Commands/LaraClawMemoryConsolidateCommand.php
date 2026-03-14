@@ -77,9 +77,9 @@ class LaraClawMemoryConsolidateCommand extends Command
         $result = $memory->consolidate($senderId, $channelEnum);
 
         $this->info('Consolidation complete:');
-        $this->line("  - Decayed: {$result['decayed']} memories");
-        $this->line("  - Pruned: {$result['pruned']} memories");
-        $this->line("  - Merged: {$result['merged']} duplicates");
+        $this->line("  - Decayed: {$result->decayed} memories");
+        $this->line("  - Pruned: {$result->pruned} memories");
+        $this->line("  - Merged: {$result->merged} duplicates");
 
         return 0;
     }
@@ -127,9 +127,9 @@ class LaraClawMemoryConsolidateCommand extends Command
         foreach ($memories as $memory) {
             try {
                 $result = $memoryEngineService->consolidate($memory->sender_id, $memory->channel);
-                $totals['decayed'] += $result['decayed'];
-                $totals['pruned'] += $result['pruned'];
-                $totals['merged'] += $result['merged'];
+                $totals['decayed'] += $result->decayed;
+                $totals['pruned'] += $result->pruned;
+                $totals['merged'] += $result->merged;
             } catch (\Exception $e) {
                 $this->error("Error consolidating for {$memory->sender_id}: {$e->getMessage()}");
             }

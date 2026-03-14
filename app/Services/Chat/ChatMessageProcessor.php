@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Chat;
 
+use App\DTOs\EpisodicEventDTO;
 use App\Enums\ChannelEnum;
 use App\Logging\MultiLogger;
 use App\Models\Event;
@@ -13,6 +14,8 @@ use App\Services\MemoryEngineService;
 use App\Services\SettingsService;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Str;
+
+use function Safe\preg_match;
 
 /**
  * Processes user messages through the agent system in the interactive chat.
@@ -201,12 +204,12 @@ class ChatMessageProcessor
             $this->memoryService->recordEvent(
                 $this->senderId,
                 ChannelEnum::CLI,
-                [
-                    'type' => 'task_completed',
-                    'content' => $content,
-                    'outcome' => $outcome,
-                    'agent_id' => $agentId,
-                ]
+                new EpisodicEventDTO(
+                    type: 'task_completed',
+                    content: $content,
+                    outcome: $outcome,
+                    agentId: $agentId,
+                )
             );
         } catch (\Exception $e) {
             MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");

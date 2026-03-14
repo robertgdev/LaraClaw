@@ -13,6 +13,8 @@ class CommandSecurityGuard
 {
     /**
      * Default blocked command patterns.
+     *
+     * @var array<int, string>
      */
     protected array $defaultBlockedCommands = [
         'rm -rf /',
@@ -32,8 +34,12 @@ class CommandSecurityGuard
         'wget | sh',
     ];
 
+    /** @var array<int, string> */
     protected array $blockedCommands;
 
+    /**
+     * @param  array<int, string>|null  $configBlockedCommands
+     */
     public function __construct(?array $configBlockedCommands = null)
     {
         $this->blockedCommands = $configBlockedCommands ?? $this->defaultBlockedCommands;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\SkillSyncResultDTO;
 use App\Logging\MultiLogger;
 use App\Models\Skill;
 
@@ -23,16 +24,12 @@ class SkillSyncService
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array  $indexedSkills  Skills from SkillSearchService::indexSkills()
-     * @return array{created: int, updated: int, deactivated: int}
+     * @param  array<string, array<string, mixed>>  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
-    public function syncFromIndex(array $indexedSkills): array
+    public function syncFromIndex(array $indexedSkills): SkillSyncResultDTO
     {
-        $stats = [
-            'created' => 0,
-            'updated' => 0,
-            'deactivated' => 0,
-        ];
+        $created = 0;
+        $updated = 0;
 
         $seenNames = [];
         foreach ($indexedSkills as $skillName => $skillData) {
@@ -70,9 +67,9 @@ class SkillSyncService
 
             // Stats
             if ($skill->wasRecentlyCreated) {
-                $stats['created']++;
+                $created++;
             } else {
-                $stats['updated']++;
+                $updated++;
             }
         }
 
@@ -81,10 +78,16 @@ class SkillSyncService
             ->where('is_active', true)
             ->update(['is_active' => false]);
 
-        $stats['deactivated'] = $deactivated;
+        MultiLogger::info('Synced skills from index', [
+            'created' => $created,
+            'updated' => $updated,
+            'deactivated' => $deactivated,
+        ]);
 
-        MultiLogger::info('Synced skills from index', $stats);
-
-        return $stats;
+        return new SkillSyncResultDTO(
+            created: $created,
+            updated: $updated,
+            deactivated: $deactivated,
+        );
     }
 }

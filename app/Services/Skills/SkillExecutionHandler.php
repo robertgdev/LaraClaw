@@ -49,7 +49,7 @@ class SkillExecutionHandler
 
             // Check if skill has scripts
             $scripts = $this->skillService->getSkillScripts($skillName);
-            if (empty($scripts)) {
+            if ($scripts->isEmpty()) {
                 MultiLogger::debug("Skill has no scripts for direct execution: {$skillName}");
 
                 return null;
@@ -58,7 +58,7 @@ class SkillExecutionHandler
             // Get the primary script (first script or one named after the skill)
             $primaryScript = null;
             foreach ($scripts as $script) {
-                $scriptName = $script['name'];
+                $scriptName = $script->name;
                 $skillBaseName = basename($skillName);
                 if (str_starts_with($scriptName, $skillBaseName)) {
                     $primaryScript = $script;
@@ -67,8 +67,8 @@ class SkillExecutionHandler
             }
 
             // Fallback to first script
-            if (! $primaryScript && ! empty($scripts)) {
-                $primaryScript = $scripts[0];
+            if (! $primaryScript && $scripts->isNotEmpty()) {
+                $primaryScript = $scripts->first();
             }
 
             if (! $primaryScript) {
@@ -82,14 +82,14 @@ class SkillExecutionHandler
 
             MultiLogger::info('Attempting direct skill execution', [
                 'skill' => $skillName,
-                'script' => $primaryScript['name'],
+                'script' => $primaryScript->name,
                 'args' => $args,
             ]);
 
             // Execute the script
             $result = $this->scriptExecutor->execute(
                 skillName: $skillName,
-                scriptName: $primaryScript['name'],
+                scriptName: $primaryScript->name,
                 args: $args,
                 agentId: $agentId
             );

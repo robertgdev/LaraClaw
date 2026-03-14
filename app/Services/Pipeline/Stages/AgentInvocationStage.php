@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pipeline\Stages;
 
+use App\DTOs\EpisodicEventDTO;
 use App\Models\Conversation;
 use App\Models\Event;
 use App\Services\AgentInvokerService;
@@ -189,11 +190,11 @@ class AgentInvocationStage implements MessagePipelineStage
             $this->memoryService->recordEvent(
                 $context->message->sender_id ?? $context->message->sender,
                 $context->message->channel,
-                [
-                    'type' => 'task_completed',
-                    'content' => $content,
-                    'outcome' => $outcome,
-                ]
+                new EpisodicEventDTO(
+                    type: 'task_completed',
+                    content: $content,
+                    outcome: $outcome,
+                )
             );
         } catch (\Exception $e) {
             \App\Logging\MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");

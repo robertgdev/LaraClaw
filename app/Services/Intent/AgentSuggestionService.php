@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Intent;
 
-use App\DTOs\IntentClassificationDTO;
+use App\DTOs\AgentSuggestionDTO;
+use App\DTOs\AgentSuggestionResultDTO;
 use App\Services\IntentClassificationService;
 use App\TypedCollections\AgentCollection;
+use App\TypedCollections\AgentSuggestionDTOCollection;
 
 /**
  * AgentSuggestionService - Suggests the best agent for a given message.
@@ -33,9 +35,8 @@ class AgentSuggestionService
      *
      * @param  string  $message  The user message
      * @param  AgentCollection  $agents  Collection of Agent models (keyed by agent_id)
-     * @return array{classification: IntentClassificationDTO, entities: array, suggestions: array, best_match: array|null}
      */
-    public function suggest(string $message, AgentCollection $agents): array
+    public function suggest(string $message, AgentCollection $agents): AgentSuggestionResultDTO
     {
         $classification = $this->classificationService->classify($message);
         $entities = $this->entityExtractor->extract($message);
@@ -43,7 +44,7 @@ class AgentSuggestionService
         $suggestions = [];
 
         foreach ($agents as $agentId => $agent) {
-            $score = 0;
+            $score = 0.0;
             $reasons = [];
 
             // Get capabilities from Agent model (JSON column cast to array)
@@ -75,22 +76,24 @@ class AgentSuggestionService
             }
 
             if ($score > 0) {
-                $suggestions[] = [
-                    'agent_id' => $agentId,
-                    'score' => $score,
-                    'reasons' => $reasons,
-                ];
+                $suggestions[] = new AgentSuggestionDTO(
+                    agentId: (string) $agentId,
+                    score: $score,
+                    reasons: $reasons,
+                );
             }
         }
 
         // Sort by score descending
-        usort($suggestions, fn ($a, $b) => $b['score'] <=> $a['score']);
+        usort($suggestions, fn (AgentSuggestionDTO $a, AgentSuggestionDTO $b) => $b->score <=> $a->score);
 
-        return [
-            'classification' => $classification,
-            'entities' => $entities,
-            'suggestions' => $suggestions,
-            'best_match' => $suggestions[0] ?? null,
-        ];
+        $suggestionsCollection = new AgentSuggestionDTOCollection($suggestions);
+
+        return new AgentSuggestionResultDTO(
+            classification: $classification,
+            entities: $entities,
+            suggestions: $suggestionsCollection,
+            bestMatch: $suggestionsCollection->first(),
+        );
     }
 }

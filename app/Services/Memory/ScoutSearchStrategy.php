@@ -6,6 +6,9 @@ use App\Enums\ChannelEnum;
 use App\Models\Memory;
 use Illuminate\Support\Collection;
 
+use function Safe\preg_replace;
+use function Safe\preg_split;
+
 /**
  * Scout-based search strategy.
  *
@@ -20,7 +23,7 @@ class ScoutSearchStrategy implements SearchStrategyInterface
     /**
      * Search episodic memories using Laravel Scout.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     public function search(
         string $senderId,
@@ -58,8 +61,8 @@ class ScoutSearchStrategy implements SearchStrategyInterface
      * - Typesense: _rankingScore
      * - Database: no score (we calculate our own)
      *
-     * @param  Collection<\App\Models\Memory>  $results
-     * @return Collection<\App\Models\Memory>
+     * @param  Collection<int, \App\Models\Memory>  $results
+     * @return Collection<int, \App\Models\Memory>
      */
     private function normalizeScores(Collection $results, string $query, string $driver): Collection
     {

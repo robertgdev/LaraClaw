@@ -42,6 +42,8 @@ class SettingsService
 
     /**
      * Add or update an agent.
+     *
+     * @param  array<string, mixed>  $config
      */
     public function setAgent(string $agentId, array $config): void
     {
@@ -129,6 +131,8 @@ class SettingsService
 
     /**
      * Add or update a team.
+     *
+     * @param  array<string, mixed>  $config
      */
     public function setTeam(string $teamId, array $config): void
     {
@@ -172,6 +176,8 @@ class SettingsService
 
     /**
      * Get all settings as a nested array.
+     *
+     * @return array<string, mixed>
      */
     public function all(): array
     {
@@ -204,6 +210,8 @@ class SettingsService
 
     /**
      * Set multiple settings at once.
+     *
+     * @param  array<string, mixed>  $settings
      */
     public function setMany(array $settings): void
     {
@@ -270,6 +278,8 @@ class SettingsService
 
     /**
      * Get enabled channels.
+     *
+     * @return array<int, string>
      */
     public function getEnabledChannels(): array
     {
@@ -314,6 +324,8 @@ class SettingsService
 
     /**
      * Export all settings to an array (for backup).
+     *
+     * @return array<string, mixed>
      */
     public function export(): array
     {
@@ -341,6 +353,8 @@ class SettingsService
 
     /**
      * Import settings from an array (for restore).
+     *
+     * @param  array<string, mixed>  $settings
      */
     public function import(array $settings): void
     {

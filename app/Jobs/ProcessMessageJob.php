@@ -207,7 +207,7 @@ class ProcessMessageJob implements ShouldQueue
     /**
      * Get active conversations (for debugging/monitoring).
      *
-     * @return array<int>
+     * @return array<int, string>
      */
     public static function getActiveConversations(ConversationStateManagerService $manager): array
     {

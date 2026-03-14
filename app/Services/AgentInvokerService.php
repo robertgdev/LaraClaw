@@ -161,7 +161,7 @@ class AgentInvokerService
             // Parse response and execute any scripts if ResponseParser is available
             if ($this->responseParser !== null) {
                 MultiLogger::debug('AgentInvokerService: Calling ResponseParser');
-                $parsed = $this->responseParser->parseAndExecute($response, $agentId);
+                $parsed = $this->responseParser->parseAndExecute($response);
 
                 // If scripts were executed, log and return modified response
                 if ($parsed->hasExecutions()) {

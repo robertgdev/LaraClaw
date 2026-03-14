@@ -130,6 +130,8 @@ class Setting extends Model
 
     /**
      * Get default settings structure.
+     *
+     * @return array<string, mixed>
      */
     public static function getDefaults(): array
     {

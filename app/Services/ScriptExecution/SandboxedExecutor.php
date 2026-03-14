@@ -37,6 +37,8 @@ class SandboxedExecutor
 
     /**
      * Execute a command with sandboxing.
+     *
+     * @param  array<int, string>  $args
      */
     public function run(
         string $command,

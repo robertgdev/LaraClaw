@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\DTOs\EpisodicEventDTO;
+use App\DTOs\MemoryConsolidationDTO;
+use App\DTOs\MemorySearchResultDTO;
 use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
 use App\Models\Memory;
@@ -9,6 +12,7 @@ use App\Services\Memory\MemoryConsolidator;
 use App\Services\Memory\MemoryRelevanceScorer;
 use App\Services\Memory\SearchStrategyFactory;
 use App\Services\Memory\SearchStrategyInterface;
+use App\TypedCollections\MemorySearchResultDTOCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -86,31 +90,26 @@ class MemoryEngineService
 
     /**
      * Record an episodic event.
-     *
-     * @param  array{type: EpisodicEventTypeEnum|string, content: string, outcome?: string|null, importance?: float, agent_id?: string|null}  $event
      */
     public function recordEvent(
         string $senderId,
         ChannelEnum $channel,
-        array $event
+        EpisodicEventDTO $event
     ): string {
         $id = (string) Str::uuid();
 
-        $eventType = $event['type'] instanceof EpisodicEventTypeEnum
-            ? $event['type']
-            : EpisodicEventTypeEnum::from($event['type']);
+        $eventType = $event->getEventType();
 
-        $importance = $event['importance']
-            ?? $eventType->defaultImportance();
+        $importance = $event->importance ?? $eventType->defaultImportance();
 
         Memory::create([
             'id' => $id,
             'sender_id' => $senderId,
             'channel' => $channel,
-            'agent_id' => $event['agent_id'] ?? null,
+            'agent_id' => $event->agentId,
             'event_type' => $eventType,
-            'content' => $event['content'],
-            'outcome' => $event['outcome'] ?? null,
+            'content' => $event->content,
+            'outcome' => $event->outcome,
             'importance' => $importance,
             'access_count' => 0,
             'last_accessed_at' => now(),
@@ -121,15 +120,13 @@ class MemoryEngineService
 
     /**
      * Search memories with hybrid scoring.
-     *
-     * @return array<int, array{id: string, content: string, relevance_score: float, source: string}>
      */
     public function search(
         string $senderId,
         ChannelEnum $channel,
         string $query,
         int $limit = 20
-    ): array {
+    ): MemorySearchResultDTOCollection {
         $results = [];
         $now = now()->timestamp * 1000;
 
@@ -143,22 +140,22 @@ class MemoryEngineService
                 maxFtsScore: $maxScore,
                 lastAccessedAtMs: $result->last_accessed_at->timestamp * 1000,
                 accessCount: $result->access_count,
-                importance: $result->importance,
+                importance: (float) $result->importance,
                 nowMs: $now
             );
 
-            $results[] = [
-                'id' => $result->id,
-                'content' => $result->content.($result->outcome ? " → {$result->outcome}" : ''),
-                'relevance_score' => round($relevanceScore, 4),
-                'source' => 'episodic',
-            ];
+            $results[] = new MemorySearchResultDTO(
+                id: $result->id,
+                content: $result->content.($result->outcome ? " → {$result->outcome}" : ''),
+                relevanceScore: round($relevanceScore, 4),
+                source: 'episodic',
+            );
         }
 
         // Sort by relevance and limit
-        usort($results, fn ($a, $b) => $b['relevance_score'] <=> $a['relevance_score']);
+        usort($results, fn ($a, $b) => $b->relevanceScore <=> $a->relevanceScore);
 
-        return array_slice($results, 0, $limit);
+        return new MemorySearchResultDTOCollection(array_slice($results, 0, $limit));
     }
 
     /**
@@ -174,11 +171,11 @@ class MemoryEngineService
         // Query-relevant memories
         if ($query) {
             $results = $this->search($senderId, $channel, $query, self::CONTEXT_MAX_RESULTS);
-            if (! empty($results)) {
+            if ($results->isNotEmpty()) {
                 $sections[] = "\n## Relevant Memories";
                 foreach ($results as $result) {
-                    $icon = $result['source'] === 'episodic' ? '📝' : '🔑';
-                    $sections[] = "{$icon} {$result['content']}";
+                    $icon = $result->isEpisodic() ? '📝' : '🔑';
+                    $sections[] = "{$icon} {$result->content}";
                 }
             }
         }
@@ -202,10 +199,8 @@ class MemoryEngineService
 
     /**
      * Consolidate memories: decay, prune, merge.
-     *
-     * @return array{decayed: int, pruned: int, merged: int}
      */
-    public function consolidate(string $senderId, ChannelEnum $channel): array
+    public function consolidate(string $senderId, ChannelEnum $channel): MemoryConsolidationDTO
     {
         return $this->consolidator->consolidate($senderId, $channel);
     }
@@ -231,7 +226,7 @@ class MemoryEngineService
     /**
      * Get all episodic memories for a user.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     public function getEvents(string $senderId, ChannelEnum $channel, ?int $limit = null): Collection
     {

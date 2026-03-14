@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pipeline;
 
+use App\DTOs\AgentRoutingDTO;
 use App\DTOs\IntentClassificationDTO;
 use App\Models\Agent;
 use App\Models\Conversation;
@@ -23,6 +24,7 @@ class MessageProcessingContext
     // Input
     public ConversationMessage $message;
 
+    /** @var array<string, mixed> */
     public array $messageData = [];
 
     public bool $isInternal = false;
@@ -41,7 +43,7 @@ class MessageProcessingContext
 
     public bool $isTeamRouted = false;
 
-    public ?array $routing = null;
+    public ?AgentRoutingDTO $routing = null;
 
     public AgentCollection $agents;
 

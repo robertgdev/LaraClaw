@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\ParsedSkillDTO;
 use App\Logging\MultiLogger;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
@@ -21,6 +22,7 @@ class SkillIndexer
 
     protected SkillFileParser $parser;
 
+    /** @var array<int, array{type: string, path: string}> */
     protected array $skillsDirs = [];
 
     protected string $cacheKey = 'laraclaw_skills_index';
@@ -58,13 +60,17 @@ class SkillIndexer
     /**
      * Index all skills from all directories (respecting priority order).
      *
-     * @return array<string, array> Keyed by skill name
+     * @return array<string, ParsedSkillDTO> Keyed by skill name
      */
     public function indexSkills(): array
     {
         $cached = Cache::get($this->cacheKey);
         if ($cached) {
-            return $cached;
+            // Reconstruct DTOs from cached array data
+            return array_map(
+                fn (array $data) => ParsedSkillDTO::fromArray($data),
+                $cached
+            );
         }
 
         $index = [];
@@ -87,12 +93,13 @@ class SkillIndexer
 
                 $skill = $this->parser->parse($skillFile);
                 if ($skill) {
-                    $index[$skill['name']] = $skill;
+                    $index[$skill->name] = $skill;
                 }
             }
         }
 
-        Cache::put($this->cacheKey, $index, $this->cacheTTL);
+        // Cache as arrays for serialization
+        Cache::put($this->cacheKey, array_map(fn ($dto) => $dto->toArray(), $index), $this->cacheTTL);
 
         MultiLogger::info('Indexed '.count($index).' skills');
 
@@ -101,6 +108,8 @@ class SkillIndexer
 
     /**
      * Refresh the skill index (clear cache and reindex).
+     *
+     * @return array<string, ParsedSkillDTO>
      */
     public function refreshIndex(): array
     {

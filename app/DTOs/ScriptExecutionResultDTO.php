@@ -21,7 +21,7 @@ final readonly class ScriptExecutionResultDTO
      * @param  int  $exitCode  The process exit code
      * @param  float  $duration  Execution time in seconds
      * @param  string|null  $scriptPath  The path to the executed script
-     * @param  array<string,string>  $args  The arguments passed to the script
+     * @param  array<int, string>  $args  The arguments passed to the script
      */
     public function __construct(
         public bool $success,
@@ -39,7 +39,7 @@ final readonly class ScriptExecutionResultDTO
      * @param  string  $output  The script output
      * @param  float  $duration  Execution time in seconds
      * @param  string|null  $scriptPath  The path to the executed script
-     * @param  array<string,string>  $args  The arguments passed to the script
+     * @param  array<int, string>  $args  The arguments passed to the script
      */
     public static function success(
         string $output,
@@ -66,7 +66,7 @@ final readonly class ScriptExecutionResultDTO
      * @param  string  $output  Any partial output before failure
      * @param  float  $duration  Execution time in seconds
      * @param  string|null  $scriptPath  The path to the attempted script
-     * @param  array<string,string>  $args  The arguments passed to the script
+     * @param  array<int, string>  $args  The arguments passed to the script
      */
     public static function error(
         string $message,

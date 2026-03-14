@@ -57,6 +57,8 @@ class JsonMessageHandler
 
     /**
      * Handle authentication.
+     *
+     * @param  array<string, mixed>  $data
      */
     protected function handleAuth(array $data): CommandResponseDTO
     {
@@ -84,6 +86,9 @@ class JsonMessageHandler
 
     /**
      * Handle web client message send.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  callable(string $message, ?string $agentId, ?string $conversationId): CommandResponseDTO  $sendToAgent
      */
     protected function handleMessageSend(array $data, callable $sendToAgent): CommandResponseDTO
     {
@@ -184,6 +189,8 @@ class JsonMessageHandler
 
     /**
      * Handle history get request.
+     *
+     * @param  array<string, mixed>  $data
      */
     protected function handleHistoryGet(array $data): CommandResponseDTO
     {

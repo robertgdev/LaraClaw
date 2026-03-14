@@ -245,7 +245,7 @@ class ConversationStateManagerService
      * Note: This requires a cache store that supports pattern-based key retrieval.
      * For Redis, this uses KEYS command. For other stores, this may not work.
      *
-     * @return array<int>
+     * @return array<int, string>
      */
     public function getActiveConversationIds(): array
     {
@@ -254,18 +254,22 @@ class ConversationStateManagerService
         // Redis-specific implementation
         if (method_exists($store, 'connection')) {
             $pattern = $this->cachePrefix.'*';
+            /** @var array<int, string> $keys */
             $keys = $store->connection()->keys($pattern);
 
-            // Remove prefix from keys
-            return array_map(function ($key) {
-                return str_replace($this->cachePrefix, '', $key);
+            // Remove prefix from keys and ensure strings
+            return array_map(function ($key): string {
+                return (string) str_replace($this->cachePrefix, '', $key);
             }, $keys);
         }
 
         // For other cache stores, we maintain a separate index
         $indexKey = $this->cachePrefix.'index';
 
-        return Cache::get($indexKey, []);
+        /** @var array<int, string> $result */
+        $result = Cache::get($indexKey, []);
+
+        return $result;
     }
 
     /**
@@ -277,7 +281,7 @@ class ConversationStateManagerService
         $conversations = new ConversationStateDTOCollection;
 
         foreach ($ids as $id) {
-            $conversation = $this->get($id);
+            $conversation = $this->get((string) $id);
             if ($conversation) {
                 $conversations->put($id, $conversation);
             }
@@ -306,7 +310,7 @@ class ConversationStateManagerService
         $cleaned = 0;
 
         foreach ($ids as $id) {
-            if (! $this->exists($id)) {
+            if (! $this->exists((string) $id)) {
                 $cleaned++;
             }
         }

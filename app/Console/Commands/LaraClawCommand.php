@@ -76,8 +76,8 @@ class LaraClawCommand extends Command
         $result = $this->commandService->processWithRouting($message, $options);
         $duration = round(microtime(true) - $startTime, 2);
 
-        $response = $result['response'];
-        $routing = $result['routing'];
+        $response = $result->response;
+        $routing = $result->routing;
 
         // Handle error responses
         if (! $response->success) {

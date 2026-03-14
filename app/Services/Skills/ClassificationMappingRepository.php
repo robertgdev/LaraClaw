@@ -51,7 +51,7 @@ class ClassificationMappingRepository
                     $stored++;
                 } catch (\Exception $e) {
                     MultiLogger::warning('Failed to store skill mapping', [
-                        'skill_id' => $mapping['skill_id'] ?? 'unknown',
+                        'skill_id' => $mapping->skillId ?? 'unknown',
                         'error' => $e->getMessage(),
                     ]);
                 }

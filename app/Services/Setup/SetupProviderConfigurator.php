@@ -26,7 +26,7 @@ class SetupProviderConfigurator
         info('Step 2: AI Provider');
 
         $providers = $this->getProviders();
-        $textProviders = array_filter($providers, fn ($p) => $p['supports_text'] ?? true);
+        $textProviders = array_filter($providers, fn ($p) => $p['supports_text']);
 
         // Build provider options with recommendations
         $providerOptions = collect($textProviders)->mapWithKeys(
@@ -105,7 +105,7 @@ class SetupProviderConfigurator
     /**
      * Get the provider registry from config.
      *
-     * @return array<string, array{display: string, recommended: bool, models: array, default_model: string, api_key: string|null, supports_text: bool}>
+     * @return array<string, array{display: string, recommended: bool, models: array<int, string>, default_model: string, api_key: string|null, supports_text: bool, note?: string}>
      */
     public function getProviders(): array
     {

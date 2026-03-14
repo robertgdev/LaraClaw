@@ -9,7 +9,6 @@ use App\Services\Skills\SignatureGenerator;
 use App\Services\Skills\SkillMatchRepository;
 use App\Services\Skills\SkillMatchStatisticsService;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,23 +28,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property string $intent_signature MD5 hash of sorted keywords
- * @property array $intent_keywords Extracted keywords from message
+ * @property array<int, string> $intent_keywords Extracted keywords from message
  * @property int $skill_id Foreign key to laraclaw_skills table
  * @property float $confidence_score Confidence score (0.00 to 1.00)
  * @property string|null $sample_message Original message sample
  * @property int $hit_count Usage tracking
  * @property string|null $intent_category Intent category
- * @property array|null $entities Extracted entities
+ * @property array<string, mixed>|null $entities Extracted entities
  * @property string|null $suggested_agent Agent suggestion
- * @property array|null $metadata Additional metadata
+ * @property array<string, mixed>|null $metadata Additional metadata
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read Skill $skill The matched skill
  */
 class SkillMatch extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'intent_signature',
         'intent_keywords',
@@ -193,7 +190,7 @@ class SkillMatch extends Model
         return new IntentClassificationDTO(
             intent: $this->intent_category ?? 'unknown',
             confidence: $this->confidence_score,
-            matchedSkill: $this->skill?->name ?? 'unknown',
+            matchedSkill: $this->skill->name ?? 'unknown',
             entities: $this->entities ?? [],
             suggestedAgent: $this->suggested_agent,
             method: 'cache_hit',
@@ -224,6 +221,8 @@ class SkillMatch extends Model
 
     /**
      * Generate a normalized signature from keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public static function generateSignature(array $keywords): string
     {
@@ -240,6 +239,8 @@ class SkillMatch extends Model
 
     /**
      * Find a cache entry by keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public static function findByKeywords(array $keywords): ?self
     {
@@ -248,6 +249,8 @@ class SkillMatch extends Model
 
     /**
      * Find similar entries by keyword overlap.
+     *
+     * @param  array<int, string>  $keywords
      */
     public static function findSimilar(array $keywords, float $minConfidence = 0.7): ?self
     {
@@ -256,6 +259,9 @@ class SkillMatch extends Model
 
     /**
      * Store a new cache entry or update existing.
+     *
+     * @param  array<string, mixed>|null  $entities
+     * @param  array<string, mixed>|null  $metadata
      */
     public static function storeMatch(
         IntentMappingDTO $intentMapping,
@@ -277,6 +283,10 @@ class SkillMatch extends Model
 
     /**
      * Store a match by skill name (convenience method).
+     *
+     * @param  array<int, string>  $keywords
+     * @param  array<string, mixed>|null  $entities
+     * @param  array<string, mixed>|null  $metadata
      *
      * @throws \InvalidArgumentException If skill not found
      */

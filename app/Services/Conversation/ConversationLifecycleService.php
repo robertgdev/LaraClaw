@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Conversation;
 
+use App\DTOs\EpisodicEventDTO;
 use App\Enums\ChannelEnum;
+use App\Enums\EpisodicEventTypeEnum;
 use App\Logging\MultiLogger;
 use App\Models\Conversation;
 use App\Services\MemoryEngineService;
@@ -150,11 +152,11 @@ class ConversationLifecycleService
             $this->memoryService->recordEvent(
                 $senderId,
                 $channel,
-                [
-                    'type' => 'task_completed',
-                    'content' => $content,
-                    'outcome' => $outcome,
-                ]
+                new EpisodicEventDTO(
+                    type: EpisodicEventTypeEnum::TASK_COMPLETED,
+                    content: $content,
+                    outcome: $outcome,
+                )
             );
         } catch (\Exception $e) {
             MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
@@ -172,7 +174,6 @@ class ConversationLifecycleService
             ChannelEnum::WHATSAPP => 'whatsapp',
             ChannelEnum::CLI => 'cli',
             ChannelEnum::WEBSOCKET => 'ws',
-            default => 'unknown',
         };
 
         return "{$prefix}_".substr($conversationId, 0, 8);

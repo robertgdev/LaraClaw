@@ -123,6 +123,8 @@ class Agent extends Model
 
     /**
      * Create or update an agent from config array.
+     *
+     * @param  array<string, mixed>  $config
      */
     public static function createFromConfig(string $agentId, array $config): self
     {

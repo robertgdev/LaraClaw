@@ -55,9 +55,9 @@ class SessionCommandStage implements MessagePipelineStage
                 $context->message->sender
             );
 
-            if ($result['handled']) {
-                $this->deliveryService->sendResponse($context->message, $result['response']);
-                $context->markHandled($result['response']);
+            if ($result->handled) {
+                $this->deliveryService->sendResponse($context->message, $result->response);
+                $context->markHandled($result->response);
 
                 return $context;
             }

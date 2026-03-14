@@ -33,7 +33,7 @@ class SetupChannelConfigurator
     /**
      * Run the channel configuration step.
      *
-     * @return array{channels: array, tokens: array, polling_intervals: array}
+     * @return array{channels: array<int, string>, tokens: array<string, string>, polling_intervals: array<string, int>}
      */
     public function configure(): array
     {

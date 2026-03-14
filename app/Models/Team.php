@@ -110,7 +110,7 @@ class Team extends Model
     /**
      * Sync agents to this team (updates pivot table only).
      *
-     * @param  array  $agentIds  Array of agent_id strings (e.g., ['agent-1', 'agent-2'])
+     * @param  array<int, string>  $agentIds  Array of agent_id strings (e.g., ['agent-1', 'agent-2'])
      */
     public function syncAgents(array $agentIds): void
     {
@@ -163,6 +163,8 @@ class Team extends Model
 
     /**
      * Convert model to config array format (compatible with SettingsService).
+     *
+     * @return array<string, mixed>
      */
     public function toConfigArray(): array
     {
@@ -178,6 +180,8 @@ class Team extends Model
 
     /**
      * Create or update a team from config array.
+     *
+     * @param  array<string, mixed>  $config
      */
     public static function createFromConfig(string $teamId, array $config): self
     {

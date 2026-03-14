@@ -9,6 +9,7 @@ use App\Logging\MultiLogger;
 use App\TypedCollections\IntentMappingDTOCollection;
 
 use function Safe\json_decode;
+use function Safe\preg_match;
 
 /**
  * Parses LLM responses for skill classification.

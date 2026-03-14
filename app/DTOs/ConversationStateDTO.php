@@ -18,7 +18,7 @@ final class ConversationStateDTO
 
     public int $startTime;
 
-    /** @var array<string> */
+    /** @var array<int, array{agentId: string, agentName: string, provider: string|null, model: string|null, response: string, timestamp: int}> */
     public array $responses = [];
 
     /** @var array<string> */

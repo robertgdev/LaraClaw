@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services\ResponseParser;
 
+use App\DTOs\ParsedCommandDTO;
+use App\DTOs\ScriptInfoDTO;
+use App\DTOs\SkillDTO;
 use App\Logging\MultiLogger;
 use App\Services\SkillSearchService;
+use App\TypedCollections\SkillDTOCollection;
+
+use function Safe\preg_match;
 
 /**
  * Resolves script paths from AI execute commands to skill/script pairs.
@@ -51,11 +57,8 @@ class ScriptPathResolver
 
     /**
      * Extract skill name and script name from a script path.
-     *
-     * @param  string  $scriptPath  The script path (e.g., "scripts/schedule.sh")
-     * @return array{skill: string, script: string}|null
      */
-    public function extractScriptInfo(string $scriptPath): ?array
+    public function extractScriptInfo(string $scriptPath): ?ScriptInfoDTO
     {
         $scriptPath = str_replace('\\', '/', $scriptPath);
         $scriptPath = trim($scriptPath, '/');
@@ -66,26 +69,26 @@ class ScriptPathResolver
             $inferredSkill = $matches[1];
             $actualSkill = $this->findSkillForScript($inferredSkill, $scriptName);
 
-            return [
-                'skill' => $actualSkill ?? $inferredSkill,
-                'script' => $scriptName,
-            ];
+            return new ScriptInfoDTO(
+                skill: $actualSkill ?? $inferredSkill,
+                script: $scriptName,
+            );
         }
 
         // Pattern 2: schedule/scripts/schedule.sh -> skill=schedule, script=schedule.sh
         if (preg_match('#^([^/]+)/scripts/([^/]+\.(\w+))$#', $scriptPath, $matches)) {
-            return [
-                'skill' => $matches[1],
-                'script' => $matches[2],
-            ];
+            return new ScriptInfoDTO(
+                skill: $matches[1],
+                script: $matches[2],
+            );
         }
 
         // Pattern 3: .agents/skills/schedule/scripts/schedule.sh
         if (preg_match('#\.agents/skills/([^/]+)/scripts/([^/]+\.(\w+))$#', $scriptPath, $matches)) {
-            return [
-                'skill' => $matches[1],
-                'script' => $matches[2],
-            ];
+            return new ScriptInfoDTO(
+                skill: $matches[1],
+                script: $matches[2],
+            );
         }
 
         // Pattern 4: Just a script name like "schedule.sh" -> try to infer skill
@@ -94,10 +97,10 @@ class ScriptPathResolver
             $inferredSkill = $matches[1];
             $actualSkill = $this->findSkillForScript($inferredSkill, $scriptName);
 
-            return [
-                'skill' => $actualSkill ?? $inferredSkill,
-                'script' => $scriptName,
-            ];
+            return new ScriptInfoDTO(
+                skill: $actualSkill ?? $inferredSkill,
+                script: $scriptName,
+            );
         }
 
         return null;
@@ -105,23 +108,24 @@ class ScriptPathResolver
 
     /**
      * Parse a command string into script path and arguments.
-     *
-     * @return array{script: string|null, args: array<string>}
      */
-    public function parseCommand(string $command): array
+    public function parseCommand(string $command): ParsedCommandDTO
     {
         $parts = $this->tokenizeCommand($command);
 
         if (empty($parts)) {
-            return ['script' => null, 'args' => []];
+            return new ParsedCommandDTO(
+                script: null,
+                args: [],
+            );
         }
 
         $script = array_shift($parts);
 
-        return [
-            'script' => $script,
-            'args' => $parts,
-        ];
+        return new ParsedCommandDTO(
+            script: $script,
+            args: $parts,
+        );
     }
 
     /**
@@ -175,48 +179,51 @@ class ScriptPathResolver
     public function findSkillForScript(string $inferredSkill, string $scriptName): ?string
     {
         $skills = $this->skillSearch->getAllSkills();
-        if (empty($skills)) {
+        if ($skills->isEmpty()) {
             MultiLogger::info('Skill index empty, refreshing...');
-            $skills = $this->skillSearch->refreshIndex();
+            $parsedSkills = $this->skillSearch->refreshIndex();
+            $skillDTOs = array_map(fn ($parsed) => $parsed->toSkillDTO(), array_values($parsedSkills));
+            $skills = new SkillDTOCollection($skillDTOs);
         }
 
         MultiLogger::debug('Finding skill for script', [
             'inferred_skill' => $inferredSkill,
             'script_name' => $scriptName,
-            'available_skills' => array_keys($skills),
+            'available_skills' => $skills->map(fn (SkillDTO $s) => $s->name)->all(),
         ]);
 
         // Exact match
-        if (isset($skills[$inferredSkill])) {
+        $exactMatch = $skills->first(fn (SkillDTO $s) => $s->name === $inferredSkill);
+        if ($exactMatch) {
             return $inferredSkill;
         }
 
         // Normalized match (remove underscores, hyphens)
         $normalizedInferred = strtolower(str_replace(['_', '-'], '', $inferredSkill));
 
-        foreach ($skills as $skillName => $skill) {
-            $normalizedSkillName = strtolower(str_replace(['_', '-'], '', $skillName));
+        foreach ($skills as $skill) {
+            $normalizedSkillName = strtolower(str_replace(['_', '-'], '', $skill->name));
 
             if ($normalizedSkillName === $normalizedInferred) {
                 MultiLogger::debug('Found normalized skill match', [
-                    'skill' => $skillName,
+                    'skill' => $skill->name,
                     'normalized' => $normalizedSkillName,
                 ]);
 
-                return $skillName;
+                return $skill->name;
             }
 
             // Check script list
-            if (! empty($skill['has_scripts'])) {
-                $scripts = $this->skillSearch->getSkillScripts($skillName);
+            if ($skill->hasScripts) {
+                $scripts = $this->skillSearch->getSkillScripts($skill->name);
                 foreach ($scripts as $script) {
-                    if ($script['name'] === $scriptName) {
+                    if ($script->name === $scriptName) {
                         MultiLogger::debug('Found skill by script lookup', [
-                            'skill' => $skillName,
+                            'skill' => $skill->name,
                             'script' => $scriptName,
                         ]);
 
-                        return $skillName;
+                        return $skill->name;
                     }
                 }
             }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DTOs\CommandResponseDTO;
+use App\DTOs\EpisodicEventDTO;
+use App\DTOs\ProcessedRoutingResultDTO;
 use App\DTOs\RoutingResultDTO;
 use App\Enums\ChannelEnum;
 use App\Logging\MultiLogger;
@@ -12,6 +14,8 @@ use App\Services\Commands\ChannelCommandHandler;
 use App\Services\Commands\JsonMessageHandler;
 use App\Services\Commands\SlashCommandHandler;
 use App\Services\Conversation\ConversationLifecycleService;
+use function Safe\json_decode;
+use function Safe\preg_match;
 
 /**
  * Command Processing Service - Generic command parsing and processing.
@@ -148,10 +152,10 @@ class CommandProcessingService
      */
     protected function handleJsonMessage(string $message, array $context = []): CommandResponseDTO
     {
-        $data = json_decode($message, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return CommandResponseDTO::error('Invalid JSON: '.json_last_error_msg(), 400);
+        try {
+            $data = json_decode($message, true);
+        } catch (\Safe\Exceptions\JsonException $e) {
+            return CommandResponseDTO::error('Invalid JSON: '.$e->getMessage(), 400);
         }
 
         return $this->jsonHandler->handle(
@@ -201,6 +205,8 @@ class CommandProcessingService
 
     /**
      * Get server status. Delegates to SlashCommandHandler.
+     *
+     * @param  array<string, mixed>  $context
      */
     public function getStatus(array $context = []): CommandResponseDTO
     {
@@ -402,17 +408,16 @@ class CommandProcessingService
      *
      * @param  string  $message  The message to process
      * @param  array<string, mixed>  $options  Options: agent, team, reset
-     * @return array{response: CommandResponseDTO, routing: RoutingResultDTO|null}
      */
-    public function processWithRouting(string $message, array $options = []): array
+    public function processWithRouting(string $message, array $options = []): ProcessedRoutingResultDTO
     {
         $message = trim($message);
 
         if (empty($message)) {
-            return [
-                'response' => CommandResponseDTO::error('Empty message', 400),
-                'routing' => null,
-            ];
+            return new ProcessedRoutingResultDTO(
+                response: CommandResponseDTO::error('Empty message', 400),
+                routing: null,
+            );
         }
 
         // Get agents and teams
@@ -421,10 +426,10 @@ class CommandProcessingService
 
         // Check if agents are configured
         if ($agents->isEmpty()) {
-            return [
-                'response' => CommandResponseDTO::error('No agents configured. Run `php artisan laraclaw:setup` to configure LaraClaw.'),
-                'routing' => null,
-            ];
+            return new ProcessedRoutingResultDTO(
+                response: CommandResponseDTO::error('No agents configured. Run `php artisan laraclaw:setup` to configure LaraClaw.'),
+                routing: null,
+            );
         }
 
         // Determine routing
@@ -436,10 +441,10 @@ class CommandProcessingService
         if ($teamId) {
             // Explicit team routing
             if (! isset($teams[$teamId])) {
-                return [
-                    'response' => CommandResponseDTO::error("Team '{$teamId}' not found."),
-                    'routing' => null,
-                ];
+                return new ProcessedRoutingResultDTO(
+                    response: CommandResponseDTO::error("Team '{$teamId}' not found."),
+                    routing: null,
+                );
             }
             $agentId = $teams[$teamId]->leader_agent_id;
             $isTeamRouted = true;
@@ -456,12 +461,12 @@ class CommandProcessingService
 
         // Verify agent exists
         if (! isset($agents[$agentId])) {
-            return [
-                'response' => CommandResponseDTO::error(
+            return new ProcessedRoutingResultDTO(
+                response: CommandResponseDTO::error(
                     "Agent '{$agentId}' not found. Available agents: ".$agents->keys()->implode(', ')
                 ),
-                'routing' => null,
-            ];
+                routing: null,
+            );
         }
 
         $agent = $agents[$agentId];
@@ -509,12 +514,11 @@ class CommandProcessingService
                         $this->memoryService->recordEvent(
                             'cli-user',
                             ChannelEnum::CLI,
-                            [
-                                'type' => 'task_completed',
-                                'content' => $content,
-                                'outcome' => $outcome,
-                                'agent_id' => $agentId,
-                            ]
+                            EpisodicEventDTO::taskCompleted(
+                                content: $content,
+                                outcome: $outcome,
+                                agentId: $agentId,
+                            )
                         );
                     } catch (\Exception $e) {
                         MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
@@ -545,22 +549,22 @@ class CommandProcessingService
                 }
             }
 
-            return [
-                'response' => new CommandResponseDTO(
+            return new ProcessedRoutingResultDTO(
+                response: new CommandResponseDTO(
                     type: 'response',
                     message: $response,
                     data: $responseData,
                     code: 200,
                     success: true
                 ),
-                'routing' => $routingResult ?? new RoutingResultDTO(
+                routing: $routingResult ?? new RoutingResultDTO(
                     agentId: $agentId,
                     message: $message,
                     isTeamRouted: $isTeamRouted,
                     teamId: $teamId,
                     routingMethod: 'default',
                 ),
-            ];
+            );
 
         } catch (\Exception $e) {
             MultiLogger::error("CLI processing error: {$e->getMessage()}", [
@@ -568,14 +572,14 @@ class CommandProcessingService
                 'message' => $message,
             ]);
 
-            return [
-                'response' => CommandResponseDTO::error($e->getMessage(), 500),
-                'routing' => new RoutingResultDTO(
+            return new ProcessedRoutingResultDTO(
+                response: CommandResponseDTO::error($e->getMessage(), 500),
+                routing: new RoutingResultDTO(
                     agentId: $agentId,
                     message: $message,
                     routingMethod: 'error',
                 ),
-            ];
+            );
         }
     }
 

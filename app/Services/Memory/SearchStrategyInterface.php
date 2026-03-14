@@ -16,7 +16,7 @@ interface SearchStrategyInterface
     /**
      * Search episodic memories.
      *
-     * @return Collection<\App\Models\Memory>
+     * @return Collection<int, \App\Models\Memory>
      */
     public function search(string $senderId, ChannelEnum $channel, string $query, int $limit): Collection;
 

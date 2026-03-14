@@ -20,7 +20,7 @@ class TeammatePromptInjector
      * @param  string|null  $agentId  The current agent's ID
      * @param  string|null  $agentName  The current agent's display name
      * @param  string|null  $agentModel  The current agent's model
-     * @param  array  $teammates  List of teammates
+     * @param  array<int, array{id: string, name: string, model: string}>  $teammates  List of teammates
      * @return string The modified content
      */
     public function inject(
@@ -71,7 +71,7 @@ class TeammatePromptInjector
      * @param  string  $agentId  The agent ID to find teammates for
      * @param  AgentCollection  $agents  All available agents
      * @param  TeamCollection  $teams  All available teams
-     * @return array List of teammates with id, name, and model
+     * @return array<int, array{id: string, name: string, model: string}> List of teammates with id, name, and model
      */
     public function extractTeammates(string $agentId, AgentCollection $agents, TeamCollection $teams): array
     {
