@@ -468,11 +468,16 @@ describe('SkillSearchService with Cache', function () {
 
         // The result depends on whether the skill exists in the index
         // If cache hit succeeds, we get from_cache=true
-        if (! empty($results) && isset($results[0]['from_cache']) && $results[0]['from_cache'] === true) {
-            expect($results[0])->toHaveKey('from_cache', true);
+        if ($results->isNotEmpty()) {
+            $first = $results->first();
+            if ($first->fromCache) {
+                expect($first->fromCache)->toBeTrue();
+            } else {
+                // Cache miss - skill not in index, fall back to search
+                expect($results)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
+            }
         } else {
-            // Cache miss - skill not in index, fall back to search
-            expect($results)->toBeArray();
+            expect($results)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
         }
     });
 

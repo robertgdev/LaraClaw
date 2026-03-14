@@ -1,5 +1,7 @@
 <?php
 
+use App\DTOs\EpisodicEventDTO;
+use App\DTOs\MemoryConsolidationDTO;
 use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
 use App\Models\Memory;
@@ -25,10 +27,10 @@ describe('MemoryEngineService', function () {
             $id = $this->memory->recordEvent(
                 $this->senderId,
                 $this->channel,
-                [
-                    'type' => EpisodicEventTypeEnum::FACT_STORED,
-                    'content' => 'User prefers dark mode',
-                ]
+                new EpisodicEventDTO(
+                    type: EpisodicEventTypeEnum::FACT_STORED,
+                    content: 'User prefers dark mode',
+                )
             );
 
             expect($id)->toBeString()
@@ -48,12 +50,12 @@ describe('MemoryEngineService', function () {
             $id = $this->memory->recordEvent(
                 $this->senderId,
                 $this->channel,
-                [
-                    'type' => EpisodicEventTypeEnum::TASK_COMPLETED,
-                    'content' => 'Finished research on ML frameworks',
-                    'outcome' => 'TensorFlow recommended',
-                    'importance' => 0.85,
-                ]
+                new EpisodicEventDTO(
+                    type: EpisodicEventTypeEnum::TASK_COMPLETED,
+                    content: 'Finished research on ML frameworks',
+                    outcome: 'TensorFlow recommended',
+                    importance: 0.85,
+                )
             );
 
             $event = $this->memory->getEvent($id);
@@ -74,7 +76,10 @@ describe('MemoryEngineService', function () {
                 $id = $this->memory->recordEvent(
                     $this->senderId,
                     $this->channel,
-                    ['type' => $test['type'], 'content' => "Test {$test['type']->value}"]
+                    new EpisodicEventDTO(
+                        type: $test['type'],
+                        content: "Test {$test['type']->value}",
+                    )
                 );
                 $event = $this->memory->getEvent($id);
                 expect((float) $event->importance)->toBe($test['expected']);
@@ -82,32 +87,32 @@ describe('MemoryEngineService', function () {
         });
 
         it('stores multiple events for the same user', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Fact 1',
-            ]);
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Fact 2',
-            ]);
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'Correction 1',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Fact 1',
+            ));
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Fact 2',
+            ));
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::CORRECTION,
+                content: 'Correction 1',
+            ));
 
             $events = $this->memory->getEvents($this->senderId, $this->channel);
             expect($events)->toHaveCount(3);
         });
 
         it('isolates events by sender and channel', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User1 fact',
-            ]);
-            $this->memory->recordEvent('other-user', ChannelEnum::DISCORD, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User2 fact',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User1 fact',
+            ));
+            $this->memory->recordEvent('other-user', ChannelEnum::DISCORD, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User2 fact',
+            ));
 
             $user1Events = $this->memory->getEvents($this->senderId, $this->channel);
             $user2Events = $this->memory->getEvents('other-user', ChannelEnum::DISCORD);
@@ -125,54 +130,54 @@ describe('MemoryEngineService', function () {
     describe('search', function () {
         it('returns results ranked by combined score', function () {
             // High importance + exact keyword match
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'Python is the preferred programming language',
-                'importance' => 0.9,
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::CORRECTION,
+                content: 'Python is the preferred programming language',
+                importance: 0.9,
+            ));
 
             // Lower importance
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::TASK_COMPLETED,
-                'content' => 'Wrote documentation for JavaScript API',
-                'importance' => 0.5,
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::TASK_COMPLETED,
+                content: 'Wrote documentation for JavaScript API',
+                importance: 0.5,
+            ));
 
             // Unrelated
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User lives in Philippines',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User lives in Philippines',
+            ));
 
             $results = $this->memory->search($this->senderId, $this->channel, 'Python programming');
 
-            // Search might return empty if index isn't synced, so we check for either results or just verify no error
-            expect($results)->toBeArray();
+            // Search returns a MemorySearchResultDTOCollection
+            expect($results)->toBeInstanceOf(\App\TypedCollections\MemorySearchResultDTOCollection::class);
 
             // If we have results, verify Python ranks high
-            if (! empty($results)) {
-                $pythonResult = collect($results)->firstWhere('content', fn ($c) => str_contains($c, 'Python'));
+            if ($results->count() > 0) {
+                $pythonResult = $results->first(fn ($r) => str_contains($r->content, 'Python'));
                 expect($pythonResult)->not->toBeNull();
             }
         });
 
         it('returns empty results for no matches', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Python programming language',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Python programming language',
+            ));
 
             $results = $this->memory->search($this->senderId, $this->channel, 'quantum physics');
 
-            expect($results)->toBeArray();
+            expect($results)->toBeInstanceOf(\App\TypedCollections\MemorySearchResultDTOCollection::class);
         });
 
         it('respects limit parameter', function () {
             for ($i = 0; $i < 10; $i++) {
-                $this->memory->recordEvent($this->senderId, $this->channel, [
-                    'type' => EpisodicEventTypeEnum::FACT_STORED,
-                    'content' => "Programming fact number {$i}",
-                ]);
+                $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                    type: EpisodicEventTypeEnum::FACT_STORED,
+                    content: "Programming fact number {$i}",
+                ));
             }
 
             $results = $this->memory->search($this->senderId, $this->channel, 'programming fact', 3);
@@ -182,10 +187,10 @@ describe('MemoryEngineService', function () {
 
     describe('reinforce', function () {
         it('bumps access count and last accessed timestamp', function () {
-            $id = $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Important fact',
-            ]);
+            $id = $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Important fact',
+            ));
 
             $before = $this->memory->getEvent($id);
             expect($before->access_count)->toBe(0);
@@ -204,10 +209,10 @@ describe('MemoryEngineService', function () {
         })->throwsNoExceptions();
 
         it('accumulates access count on multiple reinforcements', function () {
-            $id = $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Frequently accessed fact',
-            ]);
+            $id = $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Frequently accessed fact',
+            ));
 
             for ($i = 0; $i < 5; $i++) {
                 $this->memory->reinforce($id);
@@ -220,11 +225,11 @@ describe('MemoryEngineService', function () {
 
     describe('consolidate', function () {
         it('decays importance of old unaccessed memories', function () {
-            $id = $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Old memory that should decay',
-                'importance' => 0.6,
-            ]);
+            $id = $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Old memory that should decay',
+                importance: 0.6,
+            ));
 
             // Simulate 10 days without access
             Memory::where('id', $id)->update([
@@ -232,7 +237,8 @@ describe('MemoryEngineService', function () {
             ]);
 
             $result = $this->memory->consolidate($this->senderId, $this->channel);
-            expect($result['decayed'])->toBeGreaterThanOrEqual(0);
+            expect($result)->toBeInstanceOf(MemoryConsolidationDTO::class)
+                ->and($result->decayed)->toBeGreaterThanOrEqual(0);
 
             // Check importance was reduced
             $event = $this->memory->getEvent($id);
@@ -240,40 +246,40 @@ describe('MemoryEngineService', function () {
         });
 
         it('merges highly similar entries', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User prefers dark mode for code editors',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User prefers dark mode for code editors',
+            ));
 
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User prefers dark mode for code editors and terminals',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User prefers dark mode for code editors and terminals',
+            ));
 
             $beforeCount = $this->memory->getEvents($this->senderId, $this->channel)->count();
             expect($beforeCount)->toBe(2);
 
             $result = $this->memory->consolidate($this->senderId, $this->channel);
 
-            if ($result['merged'] > 0) {
+            if ($result->merged > 0) {
                 $afterCount = $this->memory->getEvents($this->senderId, $this->channel)->count();
                 expect($afterCount)->toBeLessThan($beforeCount);
             }
         });
 
         it('does not merge dissimilar entries', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User lives in Philippines',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User lives in Philippines',
+            ));
 
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'Always use TypeScript strict mode',
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::CORRECTION,
+                content: 'Always use TypeScript strict mode',
+            ));
 
             $result = $this->memory->consolidate($this->senderId, $this->channel);
-            expect($result['merged'])->toBe(0);
+            expect($result->merged)->toBe(0);
 
             $events = $this->memory->getEvents($this->senderId, $this->channel);
             expect($events)->toHaveCount(2);
@@ -281,25 +287,26 @@ describe('MemoryEngineService', function () {
 
         it('returns zero counts when nothing to consolidate', function () {
             $result = $this->memory->consolidate($this->senderId, $this->channel);
-            expect($result['merged'])->toBe(0)
-                ->and($result['pruned'])->toBe(0)
-                ->and($result['decayed'])->toBe(0);
+            expect($result)->toBeInstanceOf(MemoryConsolidationDTO::class)
+                ->and($result->merged)->toBe(0)
+                ->and($result->pruned)->toBe(0)
+                ->and($result->decayed)->toBe(0);
         });
     });
 
     describe('getContextForAgent', function () {
         it('returns formatted context string with relevant memories', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'Always use bun instead of npm',
-                'importance' => 0.9,
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::CORRECTION,
+                content: 'Always use bun instead of npm',
+                importance: 0.9,
+            ));
 
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::PREFERENCE_LEARNED,
-                'content' => 'User prefers TypeScript over JavaScript',
-                'importance' => 0.8,
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::PREFERENCE_LEARNED,
+                content: 'User prefers TypeScript over JavaScript',
+                importance: 0.8,
+            ));
 
             $context = $this->memory->getContextForAgent($this->senderId, $this->channel, 'TypeScript');
 
@@ -308,11 +315,11 @@ describe('MemoryEngineService', function () {
         });
 
         it('includes high-importance recent memories', function () {
-            $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'Never use var in TypeScript',
-                'importance' => 0.9,
-            ]);
+            $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::CORRECTION,
+                content: 'Never use var in TypeScript',
+                importance: 0.9,
+            ));
 
             $context = $this->memory->getContextForAgent($this->senderId, $this->channel);
             expect($context)->toContain('Never use var')
@@ -332,20 +339,20 @@ describe('MemoryEngineService', function () {
         });
 
         it('getEvents returns events sorted by created_at DESC', function () {
-            $id1 = $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'First',
-            ]);
+            $id1 = $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'First',
+            ));
             sleep(1); // Ensure different timestamps
-            $id2 = $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Second',
-            ]);
+            $id2 = $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Second',
+            ));
             sleep(1);
-            $id3 = $this->memory->recordEvent($this->senderId, $this->channel, [
-                'type' => EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'Third',
-            ]);
+            $id3 = $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::FACT_STORED,
+                content: 'Third',
+            ));
 
             $events = $this->memory->getEvents($this->senderId, $this->channel);
             expect($events)->toHaveCount(3)
@@ -355,10 +362,10 @@ describe('MemoryEngineService', function () {
 
         it('getEvents respects limit', function () {
             for ($i = 0; $i < 10; $i++) {
-                $this->memory->recordEvent($this->senderId, $this->channel, [
-                    'type' => EpisodicEventTypeEnum::FACT_STORED,
-                    'content' => "Event {$i}",
-                ]);
+                $this->memory->recordEvent($this->senderId, $this->channel, new EpisodicEventDTO(
+                    type: EpisodicEventTypeEnum::FACT_STORED,
+                    content: "Event {$i}",
+                ));
             }
 
             $events = $this->memory->getEvents($this->senderId, $this->channel, 3);

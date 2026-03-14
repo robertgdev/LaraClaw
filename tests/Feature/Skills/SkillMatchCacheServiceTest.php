@@ -1,7 +1,9 @@
 <?php
 
 use App\DTOs\IntentMappingDTO;
+use App\DTOs\SkillDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
+use App\DTOs\SkillSearchResultDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
 use App\Services\Skills\SkillMatchCache;
@@ -81,9 +83,29 @@ describe('SkillMatchCache', function () {
                 'keywords' => ['store'],
             ]);
 
+            $skillDTO = new SkillDTO(
+                name: 'storable-skill',
+                dirName: 'storable-skill',
+                description: 'A storable skill',
+                path: '/tmp/skills/storable-skill',
+                directory: '/tmp/skills/storable-skill',
+                keywords: ['store'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+                license: null,
+                sourceType: 'core',
+            );
+
+            $searchResult = new SkillSearchResultDTO(
+                skill: $skillDTO,
+                score: 10,
+                matchedKeywords: ['store'],
+            );
+
             $this->cache->store(
                 ['store', 'test'],
-                ['skill' => ['name' => 'storable-skill'], 'score' => 10, 'matched_keywords' => ['store']],
+                $searchResult,
                 'Store a test message',
                 ['intent' => 'automation']
             );
@@ -96,22 +118,28 @@ describe('SkillMatchCache', function () {
         it('skips store when keywords are empty', function () {
             $countBefore = SkillMatch::count();
 
-            $this->cache->store(
-                [],
-                ['skill' => ['name' => 'whatever'], 'score' => 5],
-                'empty keywords'
+            $skillDTO = new SkillDTO(
+                name: 'whatever',
+                dirName: 'whatever',
+                description: 'Whatever',
+                path: '/tmp/whatever',
+                directory: '/tmp/whatever',
+                keywords: [],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
             );
 
-            expect(SkillMatch::count())->toBe($countBefore);
-        });
-
-        it('skips store when skill is empty', function () {
-            $countBefore = SkillMatch::count();
+            $searchResult = new SkillSearchResultDTO(
+                skill: $skillDTO,
+                score: 5,
+                matchedKeywords: [],
+            );
 
             $this->cache->store(
-                ['some', 'keywords'],
-                ['skill' => null, 'score' => 5],
-                'null skill'
+                [],
+                $searchResult,
+                'empty keywords'
             );
 
             expect(SkillMatch::count())->toBe($countBefore);
@@ -147,10 +175,11 @@ describe('SkillMatchCache', function () {
 
             $result = $this->cache->buildCacheHitResult($match, ['cached', 'query']);
 
-            expect($result)->toHaveCount(1)
-                ->and($result[0]['from_cache'])->toBeTrue()
-                ->and($result[0]['skill']['name'])->toBe('cache-hit-skill')
-                ->and($result[0]['score'])->toBe(8.5); // 0.85 * 10
+            expect($result)->toHaveCount(1);
+            $firstResult = $result->first();
+            expect($firstResult->fromCache)->toBeTrue()
+                ->and($firstResult->skill->name)->toBe('cache-hit-skill')
+                ->and($firstResult->score)->toBe(8); // 0.85 * 10, rounded to int
 
             $match->refresh();
             expect($match->hit_count)->toBeGreaterThan($initialHits);

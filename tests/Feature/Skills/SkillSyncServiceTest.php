@@ -34,8 +34,8 @@ describe('SkillSyncService', function () {
                 ],
             ]);
 
-            expect($result['created'])->toBe(1)
-                ->and($result['updated'])->toBe(0)
+            expect($result->created)->toBe(1)
+                ->and($result->updated)->toBe(0)
                 ->and(Skill::count())->toBe(1);
 
             File::deleteDirectory($dir);
@@ -92,7 +92,7 @@ describe('SkillSyncService', function () {
 
             $result = $this->syncService->syncFromIndex([]);
 
-            expect($result['deactivated'])->toBe(1);
+            expect($result->deactivated)->toBe(1);
             $skill = Skill::findByName('old-skill');
             expect($skill->is_active)->toBeFalse();
         });

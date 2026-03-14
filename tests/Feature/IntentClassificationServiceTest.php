@@ -131,12 +131,12 @@ describe('IntentClassificationService', function () {
             $result = $this->service->extractEntities($message);
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKey('locations')
-                ->toHaveKey('dates')
-                ->toHaveKey('people')
-                ->toHaveKey('organizations')
-                ->toHaveKey('topics');
+            expect($result)->toBeInstanceOf(\App\DTOs\ExtractedEntitiesDTO::class)
+                ->and($result->locations)->toBe(['Berlin'])
+                ->and($result->dates)->toBeArray()
+                ->and($result->people)->toBeArray()
+                ->and($result->organizations)->toBeArray()
+                ->and($result->topics)->toBeArray();
         });
 
         it('extracts date entities', function () {
@@ -147,7 +147,7 @@ describe('IntentClassificationService', function () {
             $result = $this->service->extractEntities($message);
 
             // Assert
-            expect($result['dates'])->not()->toBeEmpty();
+            expect($result->dates)->not()->toBeEmpty();
         });
 
         it('extracts multiple date formats', function () {
@@ -158,7 +158,7 @@ describe('IntentClassificationService', function () {
             $result = $this->service->extractEntities($message);
 
             // Assert
-            expect($result['dates'])->toHaveCount(2);
+            expect($result->dates)->toHaveCount(2);
         });
     });
 
@@ -190,11 +190,11 @@ describe('IntentClassificationService', function () {
             $result = $this->service->suggestAgent($message, $agents);
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKey('classification')
-                ->toHaveKey('entities')
-                ->toHaveKey('suggestions')
-                ->toHaveKey('best_match');
+            expect($result)->toBeInstanceOf(\App\DTOs\AgentSuggestionResultDTO::class)
+                ->and($result->classification)->toBeInstanceOf(\App\DTOs\IntentClassificationDTO::class)
+                ->and($result->entities)->toBeInstanceOf(\App\DTOs\ExtractedEntitiesDTO::class)
+                ->and($result->suggestions)->toBeInstanceOf(\App\TypedCollections\AgentSuggestionDTOCollection::class)
+                ->and($result->hasSuggestions())->toBeTrue();
         });
 
         it('returns null best_match when no agents match', function () {
@@ -206,7 +206,7 @@ describe('IntentClassificationService', function () {
             $result = $this->service->suggestAgent($message, $agents);
 
             // Assert
-            expect($result['best_match'])->toBeNull();
+            expect($result->bestMatch)->toBeNull();
         });
 
         it('matches skills to message content', function () {
@@ -227,8 +227,7 @@ describe('IntentClassificationService', function () {
             $result = $this->service->suggestAgent($message, $agents);
 
             // Assert - should have suggestions since agent has imagegen skill
-            expect($result)->toBeArray()
-                ->toHaveKey('suggestions');
+            expect($result->suggestions)->toBeInstanceOf(\App\TypedCollections\AgentSuggestionDTOCollection::class);
         });
     });
 

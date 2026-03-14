@@ -1,7 +1,9 @@
 <?php
 
+use App\DTOs\SkillDTO;
 use App\Services\ResponseParser\ScriptPathResolver;
 use App\Services\SkillSearchService;
+use App\TypedCollections\SkillDTOCollection;
 
 describe('ScriptPathResolver', function () {
     beforeEach(function () {
@@ -30,39 +32,61 @@ describe('ScriptPathResolver', function () {
 
     describe('extractScriptInfo', function () {
         it('parses scripts/schedule.sh format', function () {
-            $this->skillSearch->shouldReceive('getAllSkills')->andReturn(['schedule' => ['name' => 'schedule']]);
+            $skillDTO = new SkillDTO(
+                name: 'schedule',
+                dirName: 'schedule',
+                description: 'Schedule skill',
+                path: '/path/to/schedule/SKILL.md',
+                directory: '/path/to/schedule',
+                keywords: [],
+                hasScripts: true,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            $this->skillSearch->shouldReceive('getAllSkills')->andReturn(new SkillDTOCollection([$skillDTO]));
 
             $info = $this->resolver->extractScriptInfo('scripts/schedule.sh');
 
             expect($info)->not->toBeNull()
-                ->and($info['skill'])->toBe('schedule')
-                ->and($info['script'])->toBe('schedule.sh');
+                ->and($info->skill)->toBe('schedule')
+                ->and($info->script)->toBe('schedule.sh');
         });
 
         it('parses skill/scripts/script.sh format', function () {
             $info = $this->resolver->extractScriptInfo('schedule/scripts/schedule.sh');
 
             expect($info)->not->toBeNull()
-                ->and($info['skill'])->toBe('schedule')
-                ->and($info['script'])->toBe('schedule.sh');
+                ->and($info->skill)->toBe('schedule')
+                ->and($info->script)->toBe('schedule.sh');
         });
 
         it('parses .agents/skills/skill/scripts/script.sh format', function () {
             $info = $this->resolver->extractScriptInfo('.agents/skills/weather/scripts/weather.sh');
 
             expect($info)->not->toBeNull()
-                ->and($info['skill'])->toBe('weather')
-                ->and($info['script'])->toBe('weather.sh');
+                ->and($info->skill)->toBe('weather')
+                ->and($info->script)->toBe('weather.sh');
         });
 
         it('parses bare script name', function () {
-            $this->skillSearch->shouldReceive('getAllSkills')->andReturn(['schedule' => ['name' => 'schedule']]);
+            $skillDTO = new SkillDTO(
+                name: 'schedule',
+                dirName: 'schedule',
+                description: 'Schedule skill',
+                path: '/path/to/schedule/SKILL.md',
+                directory: '/path/to/schedule',
+                keywords: [],
+                hasScripts: true,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            $this->skillSearch->shouldReceive('getAllSkills')->andReturn(new SkillDTOCollection([$skillDTO]));
 
             $info = $this->resolver->extractScriptInfo('schedule.sh');
 
             expect($info)->not->toBeNull()
-                ->and($info['skill'])->toBe('schedule')
-                ->and($info['script'])->toBe('schedule.sh');
+                ->and($info->skill)->toBe('schedule')
+                ->and($info->script)->toBe('schedule.sh');
         });
 
         it('returns null for invalid paths', function () {
@@ -76,17 +100,17 @@ describe('ScriptPathResolver', function () {
         it('parses script path and arguments', function () {
             $result = $this->resolver->parseCommand('scripts/schedule.sh create --cron "0 9 * * *"');
 
-            expect($result['script'])->toBe('scripts/schedule.sh')
-                ->and($result['args'])->toContain('create')
-                ->and($result['args'])->toContain('--cron')
-                ->and($result['args'])->toContain('0 9 * * *');
+            expect($result->script)->toBe('scripts/schedule.sh')
+                ->and($result->args)->toContain('create')
+                ->and($result->args)->toContain('--cron')
+                ->and($result->args)->toContain('0 9 * * *');
         });
 
         it('handles empty command', function () {
             $result = $this->resolver->parseCommand('');
 
-            expect($result['script'])->toBeNull()
-                ->and($result['args'])->toBeEmpty();
+            expect($result->script)->toBeNull()
+                ->and($result->args)->toBeEmpty();
         });
     });
 

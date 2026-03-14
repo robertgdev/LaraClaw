@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\DTOs\ScriptExecutionResultDTO;
+use App\DTOs\SkillDTO;
 use App\Services\ScriptExecutionService;
 use App\Services\SettingsService;
 use App\Services\SkillSearchService;
+use App\TypedCollections\SkillDTOCollection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 
@@ -74,15 +76,26 @@ SH);
     $this->settings = Mockery::mock(SettingsService::class);
     $this->settings->shouldReceive('getWorkspacePath')->andReturn($this->testWorkspace);
 
+    // Create test skill DTO
+    $this->testSkillDTO = new SkillDTO(
+        name: 'test-skill',
+        dirName: 'test-skill',
+        description: 'A test skill for unit testing',
+        path: $this->testSkillDir.'/SKILL.md',
+        directory: $this->testSkillDir,
+        keywords: [],
+        hasScripts: true,
+        hasReferences: false,
+        hasAssets: false,
+        license: null,
+        sourceType: 'local'
+    );
+
     // Mock skill search
     $this->skillSearch = Mockery::mock(SkillSearchService::class);
     $this->skillSearch->shouldReceive('getSkill')
         ->with('test-skill')
-        ->andReturn([
-            'name' => 'test-skill',
-            'directory' => $this->testSkillDir,
-            'has_scripts' => true,
-        ]);
+        ->andReturn($this->testSkillDTO);
     $this->skillSearch->shouldReceive('getSkill')
         ->withArgs(fn ($name) => $name !== 'test-skill')
         ->andReturn(null);
@@ -91,13 +104,7 @@ SH);
             ['type' => 'core', 'path' => $this->testWorkspace.'/.agents/skills'],
         ]);
     $this->skillSearch->shouldReceive('getAllSkills')
-        ->andReturn([
-            'test-skill' => [
-                'name' => 'test-skill',
-                'directory' => $this->testSkillDir,
-                'has_scripts' => true,
-            ],
-        ]);
+        ->andReturn(SkillDTOCollection::make([$this->testSkillDTO]));
 
     // Set config
     Config::set('laraclaw.script_execution', [

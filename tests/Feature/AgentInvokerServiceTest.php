@@ -219,11 +219,11 @@ describe('AgentInvokerService', function () {
             // Create a memory for the test user
             $senderId = 'test-sender-for-invoker';
             $channel = \App\Enums\ChannelEnum::TELEGRAM;
-            $memoryService->recordEvent($senderId, $channel, [
-                'type' => \App\Enums\EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User prefers TypeScript',
-                'importance' => 0.9,
-            ]);
+            $memoryService->recordEvent($senderId, $channel, new \App\DTOs\EpisodicEventDTO(
+                type: \App\Enums\EpisodicEventTypeEnum::FACT_STORED,
+                content: 'User prefers TypeScript',
+                importance: 0.9,
+            ));
 
             // Set up the invoker with memory service
             $this->agentInvoker

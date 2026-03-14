@@ -224,9 +224,9 @@ describe('Skill Model', function () {
 
             $stats = Skill::syncFromIndex($indexedSkills);
 
-            expect($stats['created'])->toBe(2)
-                ->and($stats['updated'])->toBe(0)
-                ->and($stats['deactivated'])->toBe(0)
+            expect($stats->created)->toBe(2)
+                ->and($stats->updated)->toBe(0)
+                ->and($stats->deactivated)->toBe(0)
                 ->and(Skill::count())->toBe(2);
         });
 
@@ -257,7 +257,7 @@ describe('Skill Model', function () {
 
             $stats = Skill::syncFromIndex($indexedSkills);
 
-            expect($stats['deactivated'])->toBe(1)
+            expect($stats->deactivated)->toBe(1)
                 ->and(Skill::active()->count())->toBe(1)
                 ->and(Skill::inactive()->count())->toBe(1);
         });

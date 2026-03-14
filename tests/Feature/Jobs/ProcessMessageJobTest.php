@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\EpisodicEventDTO;
 use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
 use App\Jobs\ProcessMessageJob;
@@ -114,11 +115,11 @@ describe('MemoryEngineService Event Recording', function () {
         $channel = ChannelEnum::TELEGRAM;
 
         // Simulate recording an event like ProcessMessageJob would
-        $id = $memoryService->recordEvent($senderId, $channel, [
-            'type' => EpisodicEventTypeEnum::TASK_COMPLETED,
-            'content' => 'User: What is the weather? → The weather is sunny.',
-            'importance' => 0.7,
-        ]);
+        $id = $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::TASK_COMPLETED,
+            content: 'User: What is the weather? → The weather is sunny.',
+            importance: 0.7,
+        ));
 
         expect($id)->toBeString();
 
@@ -141,11 +142,11 @@ describe('MemoryEngineService Event Recording', function () {
         $agentResponse = 'Your timezone is Europe/Berlin.';
 
         // Record the event
-        $memoryService->recordEvent($senderId, $channel, [
-            'type' => EpisodicEventTypeEnum::TASK_COMPLETED,
-            'content' => "User: {$userMessage} → {$agentResponse}",
-            'importance' => 0.7,
-        ]);
+        $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::TASK_COMPLETED,
+            content: "User: {$userMessage} → {$agentResponse}",
+            importance: 0.7,
+        ));
 
         // Verify it can be retrieved via search
         $context = $memoryService->getContextForAgent($senderId, $channel, 'timezone');
@@ -161,23 +162,23 @@ describe('MemoryEngineService Event Recording', function () {
         $memoryService = app(MemoryEngineService::class);
 
         // Record events for different users with high importance so they appear in context
-        $memoryService->recordEvent('user-telegram', ChannelEnum::TELEGRAM, [
-            'type' => EpisodicEventTypeEnum::CORRECTION,
-            'content' => 'Telegram user fact',
-            'importance' => 0.9,
-        ]);
+        $memoryService->recordEvent('user-telegram', ChannelEnum::TELEGRAM, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::CORRECTION,
+            content: 'Telegram user fact',
+            importance: 0.9,
+        ));
 
-        $memoryService->recordEvent('user-discord', ChannelEnum::DISCORD, [
-            'type' => EpisodicEventTypeEnum::CORRECTION,
-            'content' => 'Discord user fact',
-            'importance' => 0.9,
-        ]);
+        $memoryService->recordEvent('user-discord', ChannelEnum::DISCORD, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::CORRECTION,
+            content: 'Discord user fact',
+            importance: 0.9,
+        ));
 
-        $memoryService->recordEvent('user-telegram', ChannelEnum::DISCORD, [
-            'type' => EpisodicEventTypeEnum::CORRECTION,
-            'content' => 'Same user different channel',
-            'importance' => 0.9,
-        ]);
+        $memoryService->recordEvent('user-telegram', ChannelEnum::DISCORD, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::CORRECTION,
+            content: 'Same user different channel',
+            importance: 0.9,
+        ));
 
         // Verify isolation - check that each context contains only the right memories
         $telegramContext = $memoryService->getContextForAgent('user-telegram', ChannelEnum::TELEGRAM);
@@ -206,17 +207,17 @@ describe('Memory Context Format', function () {
         $channel = ChannelEnum::TELEGRAM;
 
         // Add various types of memories
-        $memoryService->recordEvent($senderId, $channel, [
-            'type' => EpisodicEventTypeEnum::CORRECTION,
-            'content' => 'Always use TypeScript strict mode',
-            'importance' => 0.9,
-        ]);
+        $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::CORRECTION,
+            content: 'Always use TypeScript strict mode',
+            importance: 0.9,
+        ));
 
-        $memoryService->recordEvent($senderId, $channel, [
-            'type' => EpisodicEventTypeEnum::PREFERENCE_LEARNED,
-            'content' => 'User prefers dark mode',
-            'importance' => 0.8,
-        ]);
+        $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
+            type: EpisodicEventTypeEnum::PREFERENCE_LEARNED,
+            content: 'User prefers dark mode',
+            importance: 0.8,
+        ));
 
         $context = $memoryService->getContextForAgent($senderId, $channel);
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\MemoryConsolidationDTO;
 use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
 use App\Models\Memory;
@@ -35,21 +36,21 @@ afterEach(function () {
 
 describe('MemoryConsolidator', function () {
     describe('consolidate', function () {
-        it('returns all three consolidation counts', function () {
+        it('returns MemoryConsolidationDTO with all three counts', function () {
             $result = $this->consolidator->consolidate($this->senderId, $this->channel);
 
-            expect($result)->toHaveKeys(['decayed', 'pruned', 'merged'])
-                ->and($result['decayed'])->toBeInt()
-                ->and($result['pruned'])->toBeInt()
-                ->and($result['merged'])->toBeInt();
+            expect($result)->toBeInstanceOf(MemoryConsolidationDTO::class)
+                ->and($result->decayed)->toBeInt()
+                ->and($result->pruned)->toBeInt()
+                ->and($result->merged)->toBeInt();
         });
 
         it('returns zeros when nothing to consolidate', function () {
             $result = $this->consolidator->consolidate($this->senderId, $this->channel);
 
-            expect($result['decayed'])->toBe(0)
-                ->and($result['pruned'])->toBe(0)
-                ->and($result['merged'])->toBe(0);
+            expect($result->decayed)->toBe(0)
+                ->and($result->pruned)->toBe(0)
+                ->and($result->merged)->toBe(0);
         });
     });
 

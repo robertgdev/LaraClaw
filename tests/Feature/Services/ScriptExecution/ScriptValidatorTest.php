@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\SkillDTO;
 use App\Services\ScriptExecution\ScriptValidator;
 use App\Services\SkillSearchService;
 use Illuminate\Support\Facades\File;
@@ -14,14 +15,23 @@ beforeEach(function () {
 
     File::put($this->testSkillDir.'/scripts/test.exe', 'binary');
 
+    // Create test skill DTO
+    $this->testSkillDTO = new SkillDTO(
+        name: 'test-skill',
+        dirName: 'test-skill',
+        description: 'A test skill',
+        path: $this->testSkillDir.'/SKILL.md',
+        directory: $this->testSkillDir,
+        keywords: [],
+        hasScripts: true,
+        hasReferences: false,
+        hasAssets: false,
+    );
+
     $this->skillSearch = Mockery::mock(SkillSearchService::class);
     $this->skillSearch->shouldReceive('getSkill')
         ->with('test-skill')
-        ->andReturn([
-            'name' => 'test-skill',
-            'directory' => $this->testSkillDir,
-            'has_scripts' => true,
-        ]);
+        ->andReturn($this->testSkillDTO);
     $this->skillSearch->shouldReceive('getSkill')
         ->withArgs(fn ($name) => $name !== 'test-skill')
         ->andReturn(null);

@@ -1,5 +1,8 @@
 <?php
 
+use App\DTOs\EpisodicEventDTO;
+use App\Enums\ChannelEnum;
+use App\Enums\EpisodicEventTypeEnum;
 use App\Services\PromptBuilderService;
 use App\Services\SkillSearchService;
 use Illuminate\Support\Facades\File;
@@ -321,12 +324,12 @@ describe('PromptBuilderService', function () {
 
             // Create a memory entry for the test user with high importance
             $senderId = 'test-sender-123';
-            $channel = \App\Enums\ChannelEnum::TELEGRAM;
-            $memoryService->recordEvent($senderId, $channel, [
-                'type' => \App\Enums\EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'User prefers dark mode',
-                'importance' => 0.9,
-            ]);
+            $channel = ChannelEnum::TELEGRAM;
+            $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
+                type: EpisodicEventTypeEnum::CORRECTION,
+                content: 'User prefers dark mode',
+                importance: 0.9,
+            ));
 
             $result = $this->service->buildSystemPrompt($this->tempDir, [
                 'sender_id' => $senderId,

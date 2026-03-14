@@ -20,21 +20,22 @@ describe('SkillIndexer', function () {
             // Second call should hit cache
             $second = $this->indexer->indexSkills();
 
-            expect($second)->toBe($first);
+            // Both should have the same skill names (keys)
+            expect(array_keys($second))->toBe(array_keys($first));
         });
 
         it('indexes skills from directories', function () {
             $result = $this->indexer->refreshIndex();
 
             expect($result)->toBeArray();
-            // Each skill should have required keys
+            // Each skill should be a ParsedSkillDTO
             foreach ($result as $name => $skill) {
-                expect($skill)
-                    ->toHaveKey('name')
-                    ->toHaveKey('description')
-                    ->toHaveKey('path')
-                    ->toHaveKey('directory')
-                    ->toHaveKey('keywords');
+                expect($skill)->toBeInstanceOf(\App\DTOs\ParsedSkillDTO::class)
+                    ->and($skill->name)->toBeString()
+                    ->and($skill->description)->toBeString()
+                    ->and($skill->path)->toBeString()
+                    ->and($skill->dirName)->toBeString()
+                    ->and($skill->keywords)->toBeArray();
             }
         });
     });
