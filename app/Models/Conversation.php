@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ChannelEnum;
+use App\Enums\FeedbackEnum;
 use App\Enums\MessageStatusEnum;
 use App\Services\Conversation\ConversationSearchService;
 use App\Services\Conversation\ConversationSessionManager;
@@ -25,6 +26,7 @@ use Laravel\Scout\Searchable;
  * - derived_title: Auto-generated from first message
  * - is_active: Currently active session for this sender_id+channel
  * - is_pinned: Pinned sessions appear at top
+ * - feedback: User feedback for the entire conversation (positive, negative, neutral)
  *
  * Session lifecycle management is handled by ConversationSessionManager.
  * Search logic is handled by ConversationSearchService.
@@ -49,6 +51,9 @@ class Conversation extends Model
         'started_at',
         'last_message_at',
         'completed_at',
+        'feedback',
+        'feedback_comment',
+        'feedback_at',
     ];
 
     protected $casts = [
@@ -58,6 +63,8 @@ class Conversation extends Model
         'started_at' => 'datetime',
         'last_message_at' => 'datetime',
         'completed_at' => 'datetime',
+        'feedback' => FeedbackEnum::class,
+        'feedback_at' => 'datetime',
     ];
 
     // ==========================================
@@ -145,6 +152,30 @@ class Conversation extends Model
     public function scopeForSender(Builder $query, string $senderId, ChannelEnum $channel): Builder
     {
         return $query->where('sender_id', $senderId)->where('channel', $channel);
+    }
+
+    /**
+     * Scope for conversations with positive feedback.
+     */
+    public function scopePositiveFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::POSITIVE);
+    }
+
+    /**
+     * Scope for conversations with negative feedback.
+     */
+    public function scopeNegativeFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::NEGATIVE);
+    }
+
+    /**
+     * Scope for conversations with any feedback.
+     */
+    public function scopeWithFeedback(Builder $query): Builder
+    {
+        return $query->whereNotNull('feedback');
     }
 
     // ==========================================
@@ -385,6 +416,67 @@ class Conversation extends Model
     }
 
     // ==========================================
+    // Feedback Methods
+    // ==========================================
+
+    /**
+     * Set feedback for this conversation.
+     */
+    public function setFeedback(FeedbackEnum $feedback, ?string $comment = null): void
+    {
+        $this->update([
+            'feedback' => $feedback,
+            'feedback_comment' => $comment,
+            'feedback_at' => now(),
+        ]);
+    }
+
+    /**
+     * Check if this conversation has feedback.
+     */
+    public function hasFeedback(): bool
+    {
+        return $this->feedback !== null;
+    }
+
+    /**
+     * Check if this conversation has positive feedback.
+     */
+    public function hasPositiveFeedback(): bool
+    {
+        return $this->feedback?->isPositive() ?? false;
+    }
+
+    /**
+     * Check if this conversation has negative feedback.
+     */
+    public function hasNegativeFeedback(): bool
+    {
+        return $this->feedback?->isNegative() ?? false;
+    }
+
+    /**
+     * Get the average feedback score for messages in this conversation.
+     * Returns null if no messages have feedback.
+     */
+    public function getAverageMessageFeedback(): ?float
+    {
+        $messagesWithFeedback = $this->messages()->whereNotNull('feedback')->get();
+        
+        if ($messagesWithFeedback->isEmpty()) {
+            return null;
+        }
+
+        /** @var \Illuminate\Support\Collection<int, ConversationMessage> $messagesWithFeedback */
+        $total = 0;
+        foreach ($messagesWithFeedback as $message) {
+            $total += $message->feedback->value;
+        }
+
+        return $total / $messagesWithFeedback->count();
+    }
+
+    // ==========================================
     // Search (delegates to ConversationSearchService)
     // ==========================================
 
@@ -405,6 +497,7 @@ class Conversation extends Model
             'team_id' => $this->team_id,
             'first_message' => $firstMessage?->message,
             'created_at' => $this->created_at?->timestamp,
+            'feedback' => $this->feedback?->value,
         ];
     }
 

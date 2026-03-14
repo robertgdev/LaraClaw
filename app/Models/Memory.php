@@ -16,8 +16,11 @@ use Laravel\Scout\Searchable;
  * - Layer 1: Episodic Memory — timestamped events with outcomes & importance scoring
  * - Layer 2: Semantic Index — FTS5/full-text search with BM25 ranking
  * - Layer 3: Temporal Decay — Ebbinghaus forgetting curve + access frequency strengthening
+ * - Layer 4: Feedback Score — user feedback influences memory relevance
  *
  * @property float $search_score Runtime search score (not persisted)
+ * @property float|null $feedback_score Feedback score from -1.0 to 1.0
+ * @property int $feedback_count Number of feedback signals received
  */
 class Memory extends Model
 {
@@ -36,6 +39,8 @@ class Memory extends Model
         'content',
         'outcome',
         'importance',
+        'feedback_score',
+        'feedback_count',
         'access_count',
         'last_accessed_at',
         'created_at',
@@ -45,6 +50,8 @@ class Memory extends Model
         'channel' => ChannelEnum::class,
         'event_type' => EpisodicEventTypeEnum::class,
         'importance' => 'decimal:2',
+        'feedback_score' => 'decimal:2',
+        'feedback_count' => 'integer',
         'access_count' => 'integer',
         'created_at' => 'datetime',
         'last_accessed_at' => 'datetime',
@@ -141,6 +148,30 @@ class Memory extends Model
         return $query->where('access_count', 0);
     }
 
+    /**
+     * Scope for memories with positive feedback.
+     */
+    public function scopePositiveFeedback(Builder $query, float $threshold = 0.5): Builder
+    {
+        return $query->where('feedback_score', '>=', $threshold);
+    }
+
+    /**
+     * Scope for memories with negative feedback.
+     */
+    public function scopeNegativeFeedback(Builder $query, float $threshold = -0.5): Builder
+    {
+        return $query->where('feedback_score', '<=', $threshold);
+    }
+
+    /**
+     * Scope for memories with any feedback.
+     */
+    public function scopeWithFeedback(Builder $query): Builder
+    {
+        return $query->whereNotNull('feedback_score');
+    }
+
     // ==========================================
     // Helper Methods
     // ==========================================
@@ -166,6 +197,46 @@ class Memory extends Model
         if ($newImportance >= 0.05) {
             $this->update(['importance' => $newImportance]);
         }
+    }
+
+    /**
+     * Apply feedback to this memory.
+     * Updates the feedback score using a running average.
+     *
+     * @param float $feedbackValue Feedback value (-1.0 to 1.0)
+     */
+    public function applyFeedback(float $feedbackValue): void
+    {
+        $currentScore = $this->feedback_score ?? 0.0;
+        $currentCount = $this->feedback_count ?? 0;
+
+        // Calculate new average
+        $newCount = $currentCount + 1;
+        $newScore = (($currentScore * $currentCount) + $feedbackValue) / $newCount;
+
+        // Clamp to valid range
+        $newScore = max(-1.0, min(1.0, $newScore));
+
+        $this->update([
+            'feedback_score' => $newScore,
+            'feedback_count' => $newCount,
+        ]);
+    }
+
+    /**
+     * Check if this memory has positive feedback.
+     */
+    public function hasPositiveFeedback(): bool
+    {
+        return ($this->feedback_score ?? 0) > 0.3;
+    }
+
+    /**
+     * Check if this memory has negative feedback.
+     */
+    public function hasNegativeFeedback(): bool
+    {
+        return ($this->feedback_score ?? 0) < -0.3;
     }
 
     public static function statsForSender(string $senderId, ChannelEnum $channel): MemoryStatsDTO

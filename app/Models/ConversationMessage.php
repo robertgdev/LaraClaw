@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ChannelEnum;
+use App\Enums\FeedbackEnum;
 use App\Enums\MessageStatusEnum;
 use App\Enums\QueueTypeEnum;
 use Database\Factories\ConversationMessageFactory;
@@ -21,6 +22,7 @@ use Illuminate\Support\Str;
  * - Each message belongs to a conversation (via conversation_id)
  * - Messages have a direction: 'incoming' (from user) or 'outgoing' (from agent)
  * - All message content is stored here, not in the conversations table
+ * - Supports user feedback (positive, negative, neutral)
  */
 class ConversationMessage extends Model
 {
@@ -47,6 +49,9 @@ class ConversationMessage extends Model
         'error_message',
         'processed_at',
         'reply_to',
+        'feedback',
+        'feedback_comment',
+        'feedback_at',
     ];
 
     protected $casts = [
@@ -56,6 +61,8 @@ class ConversationMessage extends Model
         'queue_type' => QueueTypeEnum::class,
         'channel' => ChannelEnum::class,
         'processed_at' => 'datetime',
+        'feedback' => FeedbackEnum::class,
+        'feedback_at' => 'datetime',
     ];
 
     protected $attributes = [
@@ -202,6 +209,30 @@ class ConversationMessage extends Model
         return $query->where('channel', $channel);
     }
 
+    /**
+     * Scope for messages with positive feedback.
+     */
+    public function scopePositiveFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::POSITIVE);
+    }
+
+    /**
+     * Scope for messages with negative feedback.
+     */
+    public function scopeNegativeFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::NEGATIVE);
+    }
+
+    /**
+     * Scope for messages with any feedback.
+     */
+    public function scopeWithFeedback(Builder $query): Builder
+    {
+        return $query->whereNotNull('feedback');
+    }
+
     // ==========================================
     // Status Methods
     // ==========================================
@@ -254,6 +285,46 @@ class ConversationMessage extends Model
             'error_message' => $errorMessage,
             'retry_count' => $this->retry_count + 1,
         ]);
+    }
+
+    // ==========================================
+    // Feedback Methods
+    // ==========================================
+
+    /**
+     * Set feedback for this message.
+     */
+    public function setFeedback(FeedbackEnum $feedback, ?string $comment = null): void
+    {
+        $this->update([
+            'feedback' => $feedback,
+            'feedback_comment' => $comment,
+            'feedback_at' => now(),
+        ]);
+    }
+
+    /**
+     * Check if this message has feedback.
+     */
+    public function hasFeedback(): bool
+    {
+        return $this->feedback !== null;
+    }
+
+    /**
+     * Check if this message has positive feedback.
+     */
+    public function hasPositiveFeedback(): bool
+    {
+        return $this->feedback?->isPositive() ?? false;
+    }
+
+    /**
+     * Check if this message has negative feedback.
+     */
+    public function hasNegativeFeedback(): bool
+    {
+        return $this->feedback?->isNegative() ?? false;
     }
 
     // ==========================================
@@ -329,6 +400,8 @@ class ConversationMessage extends Model
      *       conversationId: string,
      *       direction: string,
      *       isInternal: bool,
+     *       feedback: int|null,
+     *       feedbackComment: string|null,
      *   }
      */
     public function toMessageData(): array
@@ -345,6 +418,8 @@ class ConversationMessage extends Model
             'conversationId' => $this->conversation_id,
             'direction' => $this->direction,
             'isInternal' => $this->is_internal,
+            'feedback' => $this->feedback?->value,
+            'feedbackComment' => $this->feedback_comment,
         ];
     }
 
@@ -362,6 +437,8 @@ class ConversationMessage extends Model
      *        files: array<int, string>|null,
      *        provider: string|null,
      *        model: string|null,
+     *        feedback: int|null,
+     *        feedbackComment: string|null,
      *    }
      */
     public function toResponseData(): array
@@ -377,6 +454,8 @@ class ConversationMessage extends Model
             'files' => $this->files,
             'provider' => $this->provider,
             'model' => $this->model,
+            'feedback' => $this->feedback?->value,
+            'feedbackComment' => $this->feedback_comment,
         ];
     }
 }
