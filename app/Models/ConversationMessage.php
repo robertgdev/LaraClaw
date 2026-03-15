@@ -293,14 +293,18 @@ class ConversationMessage extends Model
 
     /**
      * Set feedback for this message.
+     *
+     * Uses withoutTimestamps() so that recording feedback does not alter updated_at.
      */
     public function setFeedback(FeedbackEnum $feedback, ?string $comment = null): void
     {
-        $this->update([
-            'feedback' => $feedback,
-            'feedback_comment' => $comment,
-            'feedback_at' => now(),
-        ]);
+        static::withoutTimestamps(function () use ($feedback, $comment) {
+            $this->update([
+                'feedback' => $feedback,
+                'feedback_comment' => $comment,
+                'feedback_at' => now(),
+            ]);
+        });
     }
 
     /**

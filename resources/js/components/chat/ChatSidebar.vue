@@ -4,6 +4,28 @@ import type { SessionMeta, FeedbackValue } from '@/types/chat';
 import { textFromMessage } from '@/lib/chat-utils';
 import FeedbackButtons from './FeedbackButtons.vue';
 
+// ── Local state for delete confirmation ──
+const pendingDeleteSession = ref<SessionMeta | null>(null);
+const showDeleteModal = ref(false);
+
+function openDeleteModal(session: SessionMeta) {
+    pendingDeleteSession.value = session;
+    showDeleteModal.value = true;
+}
+
+function cancelDelete() {
+    showDeleteModal.value = false;
+    pendingDeleteSession.value = null;
+}
+
+function confirmDelete() {
+    if (pendingDeleteSession.value) {
+        emit('deleteSession', pendingDeleteSession.value);
+    }
+    showDeleteModal.value = false;
+    pendingDeleteSession.value = null;
+}
+
 const props = defineProps({
     sessions: {
         type: Array as PropType<SessionMeta[]>,
@@ -43,7 +65,7 @@ function getLastMessagePreview(session: SessionMeta): string {
 
 function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
     event.stopPropagation();
-    emit('deleteSession', session);
+    openDeleteModal(session);
 }
 
 function handleConversationFeedback(session: SessionMeta, feedback: FeedbackValue) {
@@ -197,4 +219,68 @@ function handleConversationFeedback(session: SessionMeta, feedback: FeedbackValu
             </div>
         </div>
     </aside>
+
+    <!-- Delete confirmation modal -->
+    <Teleport to="body">
+        <Transition
+            enter-active-class="transition-all duration-200 ease-out"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition-all duration-150 ease-in"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="showDeleteModal"
+                class="fixed inset-0 z-50 flex items-center justify-center"
+                @click.self="cancelDelete"
+                @keydown.esc="cancelDelete"
+            >
+                <!-- Backdrop -->
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+
+                <!-- Dialog -->
+                <div
+                    class="relative bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-2xl shadow-2xl w-[min(400px,92vw)] p-6"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="delete-dialog-title"
+                >
+                    <!-- Icon -->
+                    <div class="flex items-center justify-center w-11 h-11 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                    </div>
+
+                    <h2 id="delete-dialog-title" class="text-base font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                        Delete conversation?
+                    </h2>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
+                        "<span class="font-medium text-neutral-700 dark:text-neutral-200">{{ pendingDeleteSession ? getSessionTitle(pendingDeleteSession) : '' }}</span>" will be permanently deleted. This action cannot be undone.
+                    </p>
+
+                    <div class="flex items-center gap-3 justify-end">
+                        <button
+                            type="button"
+                            class="px-4 py-2 rounded-lg text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                            @click="cancelDelete"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 transition-colors"
+                            @click="confirmDelete"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
+    </Teleport>
 </template>

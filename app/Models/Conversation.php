@@ -421,14 +421,19 @@ class Conversation extends Model
 
     /**
      * Set feedback for this conversation.
+     *
+     * Uses withoutTimestamps() so that recording feedback does not alter updated_at
+     * and therefore does not change the conversation's position in the sidebar list.
      */
     public function setFeedback(FeedbackEnum $feedback, ?string $comment = null): void
     {
-        $this->update([
-            'feedback' => $feedback,
-            'feedback_comment' => $comment,
-            'feedback_at' => now(),
-        ]);
+        static::withoutTimestamps(function () use ($feedback, $comment) {
+            $this->update([
+                'feedback' => $feedback,
+                'feedback_comment' => $comment,
+                'feedback_at' => now(),
+            ]);
+        });
     }
 
     /**
