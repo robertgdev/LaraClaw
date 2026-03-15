@@ -260,7 +260,7 @@ function handleConversationFeedback(session: SessionMeta, feedback: FeedbackValu
                         Delete conversation?
                     </h2>
                     <p class="text-sm text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
-                        "<span class="font-medium text-neutral-700 dark:text-neutral-200">{{ pendingDeleteSession ? getSessionTitle(pendingDeleteSession) : '' }}</span>" will be permanently deleted. This action cannot be undone.
+                        Are you sure you wish to delete the conversation<br/>"<span class="font-medium text-neutral-700 dark:text-neutral-200">'{{ pendingDeleteSession ? getSessionTitle(pendingDeleteSession) : '' }}</span>"?
                     </p>
 
                     <div class="flex items-center gap-3 justify-end">
