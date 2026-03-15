@@ -346,11 +346,11 @@ class LaraClawSetupCommand extends Command
 
             $this->newLine();
             $this->line('<fg=green>  ┌──────────────────────────────────────────────────────────┐</>');
-            $this->line('<fg=green>  │</> <fg=white;options=bold>  Skill Classification Complete!</>                            <fg=green>│</>');
+            $this->line('<fg=green>  │</> <fg=white;options=bold>  Skill Classification Complete!</>                         <fg=green>│</>');
             $this->line('<fg=green>  │</>                                                          <fg=green>│</>');
-            $this->line("<fg=green>  │</>   <fg=cyan>Skills processed:</>    {$result->skillsProcessed}                              <fg=green>│</>");
-            $this->line("<fg=green>  │</>   <fg=cyan>Mappings generated:</>  {$result->mappingsGenerated}                            <fg=green>│</>");
-            $this->line("<fg=green>  │</>   <fg=cyan>Mappings stored:</>     {$result->mappingsStored}                             <fg=green>│</>");
+            $this->line("<fg=green>  │</>   <fg=cyan>Skills processed:</>    {$result->skillsProcessed}                                 <fg=green>│</>");
+            $this->line("<fg=green>  │</>   <fg=cyan>Mappings generated:</>  {$result->mappingsGenerated}                                <fg=green>│</>");
+            $this->line("<fg=green>  │</>   <fg=cyan>Mappings stored:</>     {$result->mappingsStored}                                <fg=green>│</>");
             $this->line('<fg=green>  │</>                                                          <fg=green>│</>');
             $this->line('<fg=green>  └──────────────────────────────────────────────────────────┘</>');
             $this->newLine();

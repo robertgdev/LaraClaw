@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\ParsedSkillDTO;
 use App\DTOs\SkillSyncResultDTO;
 use App\Logging\MultiLogger;
 use App\Models\Skill;
@@ -24,7 +25,7 @@ class SkillSyncService
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array<string, array<string, mixed>>  $indexedSkills  Skills from SkillSearchService::indexSkills()
+     * @param  array<string, ParsedSkillDTO>  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
     public function syncFromIndex(array $indexedSkills): SkillSyncResultDTO
     {
@@ -34,19 +35,19 @@ class SkillSyncService
         $seenNames = [];
         foreach ($indexedSkills as $skillName => $skillData) {
             $seenNames[] = $skillName;
-            $checksum = $this->checksumCalculator->calculate($skillData['directory']);
+            $checksum = $this->checksumCalculator->calculate($skillData->directory);
 
             // Base attributes
             $attributes = [
-                'dir_name' => $skillData['dir_name'],
-                'path' => $skillData['path'],
-                'description' => $skillData['description'],
-                'license' => $skillData['license'] ?? null,
-                'keywords' => $skillData['keywords'] ?? [],
+                'dir_name' => $skillData->dirName,
+                'path' => $skillData->path,
+                'description' => $skillData->description,
+                'license' => $skillData->license,
+                'keywords' => $skillData->keywords,
                 'checksum' => $checksum,
-                'has_scripts' => $skillData['has_scripts'] ?? false,
-                'has_references' => $skillData['has_references'] ?? false,
-                'has_assets' => $skillData['has_assets'] ?? false,
+                'has_scripts' => $skillData->hasScripts,
+                'has_references' => $skillData->hasReferences,
+                'has_assets' => $skillData->hasAssets,
                 'is_active' => true,
             ];
 

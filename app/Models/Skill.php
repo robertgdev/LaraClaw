@@ -270,7 +270,7 @@ class Skill extends Model
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array<string, mixed>  $indexedSkills  Skills from SkillSearchService::indexSkills()
+     * @param  array<string, \App\DTOs\ParsedSkillDTO>  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
     public static function syncFromIndex(array $indexedSkills): SkillSyncResultDTO
     {
