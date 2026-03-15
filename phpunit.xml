@@ -31,5 +31,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- API key used by REST API middleware during tests -->
+        <env name="LARACLAW_SERVER_API_KEY" value="test-api-key-for-testing"/>
     </php>
 </phpunit>

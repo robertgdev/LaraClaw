@@ -43,6 +43,7 @@ class ChatController extends Controller
                 ] : null,
                 'totalTokens' => null,
                 'contextTokens' => null,
+                'feedback' => $conv->feedback?->value,
             ];
         });
 
@@ -207,6 +208,82 @@ class ChatController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Store feedback for a specific message.
+     *
+     * POST /api/feedback/message
+     * Body: { messageId: string, feedback: -1|0|1, comment?: string }
+     *
+     * Accepts both the UUID (message_id column) and the integer primary key.
+     */
+    public function feedbackMessage(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'messageId' => 'required|string',
+            'feedback' => 'required|integer|in:-1,0,1',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $messageId = $validated['messageId'];
+
+        // Try UUID lookup first, then fall back to integer PK
+        $message = ConversationMessage::where('message_id', $messageId)->first()
+            ?? ConversationMessage::find($messageId);
+
+        if (! $message) {
+            return response()->json(['error' => 'Message not found'], 404);
+        }
+
+        $feedback = \App\Enums\FeedbackEnum::fromInt((int) $validated['feedback']);
+        if (! $feedback) {
+            return response()->json(['error' => 'Invalid feedback value'], 422);
+        }
+
+        $message->setFeedback($feedback, $validated['comment'] ?? null);
+
+        return response()->json([
+            'success' => true,
+            'message_id' => $message->message_id,
+            'feedback' => $feedback->value,
+            'feedback_label' => $feedback->label(),
+        ]);
+    }
+
+    /**
+     * Store feedback for a conversation.
+     *
+     * POST /api/feedback/conversation
+     * Body: { conversationId: string, feedback: -1|0|1, comment?: string }
+     */
+    public function feedbackConversation(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'conversationId' => 'required|string',
+            'feedback' => 'required|integer|in:-1,0,1',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $conversation = Conversation::where('conversation_id', $validated['conversationId'])->first();
+
+        if (! $conversation) {
+            return response()->json(['error' => 'Conversation not found'], 404);
+        }
+
+        $feedback = \App\Enums\FeedbackEnum::fromInt((int) $validated['feedback']);
+        if (! $feedback) {
+            return response()->json(['error' => 'Invalid feedback value'], 422);
+        }
+
+        $conversation->setFeedback($feedback, $validated['comment'] ?? null);
+
+        return response()->json([
+            'success' => true,
+            'conversation_id' => $conversation->conversation_id,
+            'feedback' => $feedback->value,
+            'feedback_label' => $feedback->label(),
+        ]);
     }
 
     /**
