@@ -81,7 +81,6 @@ describe('ScoutSearchStrategy', function () {
     it('searches and returns results with search_score', function () {
         // Create test data
         Memory::create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
             'sender_id' => $this->senderId,
             'channel' => $this->channel,
             'event_type' => EpisodicEventTypeEnum::FACT_STORED,
@@ -105,7 +104,6 @@ describe('ScoutSearchStrategy', function () {
 
     it('returns empty collection for no matches', function () {
         Memory::create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
             'sender_id' => $this->senderId,
             'channel' => $this->channel,
             'event_type' => EpisodicEventTypeEnum::FACT_STORED,
@@ -125,7 +123,6 @@ describe('ScoutSearchStrategy', function () {
     it('respects limit parameter', function () {
         for ($i = 0; $i < 10; $i++) {
             Memory::create([
-                'id' => (string) \Illuminate\Support\Str::uuid(),
                 'sender_id' => $this->senderId,
                 'channel' => $this->channel,
                 'event_type' => EpisodicEventTypeEnum::FACT_STORED,
@@ -146,7 +143,6 @@ describe('ScoutSearchStrategy', function () {
 describe('DatabaseSearchStrategy', function () {
     it('searches using LIKE fallback', function () {
         Memory::create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
             'sender_id' => $this->senderId,
             'channel' => $this->channel,
             'event_type' => EpisodicEventTypeEnum::FACT_STORED,
@@ -178,7 +174,6 @@ describe('DatabaseSearchStrategy', function () {
 
     it('isolates results by sender_id and channel', function () {
         Memory::create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
             'sender_id' => $this->senderId,
             'channel' => $this->channel,
             'event_type' => EpisodicEventTypeEnum::FACT_STORED,
@@ -189,7 +184,6 @@ describe('DatabaseSearchStrategy', function () {
         ]);
 
         Memory::create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
             'sender_id' => 'other-user',
             'channel' => ChannelEnum::DISCORD,
             'event_type' => EpisodicEventTypeEnum::FACT_STORED,

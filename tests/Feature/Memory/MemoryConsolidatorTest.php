@@ -19,7 +19,6 @@ beforeEach(function () {
 function createMemory(string $senderId, ChannelEnum $channel, array $overrides = []): Memory
 {
     return Memory::create(array_merge([
-        'id' => (string) \Illuminate\Support\Str::uuid(),
         'sender_id' => $senderId,
         'channel' => $channel,
         'event_type' => EpisodicEventTypeEnum::FACT_STORED,

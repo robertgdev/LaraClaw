@@ -23,7 +23,7 @@ afterEach(function () {
 
 describe('MemoryEngineService', function () {
     describe('recordEvent', function () {
-        it('stores an episodic event and returns its id', function () {
+        it('stores an episodic event and returns its integer id', function () {
             $id = $this->memory->recordEvent(
                 $this->senderId,
                 $this->channel,
@@ -33,8 +33,7 @@ describe('MemoryEngineService', function () {
                 )
             );
 
-            expect($id)->toBeString()
-                ->and(strlen($id))->toBe(36); // UUID format
+            expect($id)->toBeInt()->toBeGreaterThan(0);
 
             $event = $this->memory->getEvent($id);
             expect($event)->not->toBeNull()
@@ -204,8 +203,8 @@ describe('MemoryEngineService', function () {
         });
 
         it('handles non-existent id gracefully', function () {
-            // Should not throw
-            $this->memory->reinforce('non-existent-id');
+            // Should not throw; 0 is guaranteed not to exist
+            $this->memory->reinforce(0);
         })->throwsNoExceptions();
 
         it('accumulates access count on multiple reinforcements', function () {
@@ -334,7 +333,7 @@ describe('MemoryEngineService', function () {
 
     describe('getEvent / getEvents', function () {
         it('getEvent returns null for non-existent id', function () {
-            $result = $this->memory->getEvent('does-not-exist');
+            $result = $this->memory->getEvent(999999);
             expect($result)->toBeNull();
         });
 

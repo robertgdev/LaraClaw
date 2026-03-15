@@ -121,7 +121,7 @@ describe('MemoryEngineService Event Recording', function () {
             importance: 0.7,
         ));
 
-        expect($id)->toBeString();
+        expect($id)->toBeInt()->toBeGreaterThan(0);
 
         $event = $memoryService->getEvent($id);
         expect($event)->not->toBeNull()
