@@ -73,6 +73,7 @@ async function loadSessions() {
             label: s.label,
             updatedAt: s.updatedAt,
             lastMessage: s.lastMessage,
+            feedback: s.feedback ?? null,
         }));
     } catch (err) {
         console.error('[Chat] Failed to load sessions:', err);
@@ -125,6 +126,11 @@ const {
             (m) => m.messageId === messageId || m.id === messageId,
         );
         if (msg) msg.feedback = feedback;
+    },
+    onConversationFeedbackSaved: (conversationId, feedback) => {
+        // Server confirmed conversation feedback saved — update local sessions list
+        const session = sessions.value.find((s) => s.friendlyId === conversationId);
+        if (session) session.feedback = feedback;
     },
     onMessage: (message) => {
         // Only replace an existing message if it shares the SAME streaming run id.
@@ -229,6 +235,11 @@ function handleMessageFeedback(messageId: string, feedback: FeedbackValue) {
     sendWsMessage({ type: 'feedback_message', message_id: messageId, feedback });
 }
 
+function handleConversationFeedback(conversationId: string, feedback: FeedbackValue) {
+    // Send via WebSocket; the UI will update when onConversationFeedbackSaved fires
+    sendWsMessage({ type: 'feedback_conversation', conversation_id: conversationId, feedback });
+}
+
 function handleLogout() {
     authStore.logout();
     router.visit('/');
@@ -254,6 +265,7 @@ const currentTitle = computed(() => {
             @select-session="handleSelectSession"
             @delete-session="handleDeleteSession"
             @toggle-collapse="isSidebarCollapsed = !isSidebarCollapsed"
+            @conversation-feedback="handleConversationFeedback"
         />
 
         <!-- ── Main area ── -->

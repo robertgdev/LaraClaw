@@ -21,6 +21,8 @@ interface UseChatStreamOptions {
     onConversationId?: (conversationId: string) => void;
     /** Called when the server confirms feedback was saved for a message. */
     onMessageFeedbackSaved?: (messageId: string, feedback: import('@/types/chat').FeedbackValue) => void;
+    /** Called when the server confirms feedback was saved for a conversation. */
+    onConversationFeedbackSaved?: (conversationId: string, feedback: import('@/types/chat').FeedbackValue) => void;
 }
 
 interface WebSocketMessage {
@@ -33,7 +35,7 @@ interface WebSocketMessage {
 }
 
 export function useChatStream(options: UseChatStreamOptions) {
-    const { sessionKey, friendlyId, onMessage, onStateChange, onHistoryRefresh, onConnectionChange, onConversationId, onMessageFeedbackSaved } = options;
+    const { sessionKey, friendlyId, onMessage, onStateChange, onHistoryRefresh, onConnectionChange, onConversationId, onMessageFeedbackSaved, onConversationFeedbackSaved } = options;
 
     const authStore = useAuthStore();
     const isConnected = ref(false);
@@ -223,6 +225,17 @@ export function useChatStream(options: UseChatStreamOptions) {
                 const fbVal = typeof savedData.feedback === 'number' ? savedData.feedback as import('@/types/chat').FeedbackValue : null;
                 if (msgId && fbVal !== null) {
                     onMessageFeedbackSaved?.(msgId, fbVal);
+                }
+                break;
+            }
+
+            case 'feedback_conversation_saved': {
+                // Server confirmed conversation feedback was stored
+                const convData = (data.data || {}) as Record<string, unknown>;
+                const convId = typeof convData.conversation_id === 'string' ? convData.conversation_id : '';
+                const convFb = typeof convData.feedback === 'number' ? convData.feedback as import('@/types/chat').FeedbackValue : null;
+                if (convId && convFb !== null) {
+                    onConversationFeedbackSaved?.(convId, convFb);
                 }
                 break;
             }

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, type PropType } from 'vue';
-import type { SessionMeta } from '@/types/chat';
+import { ref, type PropType } from 'vue';
+import type { SessionMeta, FeedbackValue } from '@/types/chat';
 import { textFromMessage } from '@/lib/chat-utils';
+import FeedbackButtons from './FeedbackButtons.vue';
 
 const props = defineProps({
     sessions: {
@@ -27,6 +28,7 @@ const emit = defineEmits<{
     selectSession: [session: SessionMeta];
     toggleCollapse: [];
     deleteSession: [session: SessionMeta];
+    conversationFeedback: [conversationId: string, feedback: FeedbackValue];
 }>();
 
 function getSessionTitle(session: SessionMeta): string {
@@ -42,6 +44,10 @@ function getLastMessagePreview(session: SessionMeta): string {
 function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
     event.stopPropagation();
     emit('deleteSession', session);
+}
+
+function handleConversationFeedback(session: SessionMeta, feedback: FeedbackValue) {
+    emit('conversationFeedback', session.friendlyId, feedback);
 }
 </script>
 
@@ -83,7 +89,6 @@ function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
                 title="Collapse sidebar"
                 @click="$emit('toggleCollapse')"
             >
-                <!-- Left-pointing chevrons -->
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="11 17 6 12 11 7" />
                     <polyline points="18 17 13 12 18 7" />
@@ -99,7 +104,6 @@ function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
                 title="Expand sidebar"
                 @click="$emit('toggleCollapse')"
             >
-                <!-- Right-pointing chevrons -->
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="13 17 18 12 13 7" />
                     <polyline points="6 17 11 12 6 7" />
@@ -126,7 +130,8 @@ function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
         <!-- Session List (only when expanded) -->
         <div
             v-if="!isCollapsed"
-            class="flex-1 min-h-0 overflow-y-auto px-2 pb-2 scrollbar-thin scrollbar-thumb-neutral-300 dark:scrollbar-thumb-neutral-600 scrollbar-track-transparent"
+            class="flex-1 min-h-0 overflow-y-auto px-2 pb-2"
+            style="scrollbar-width: thin; scrollbar-color: rgba(156,163,175,0.4) transparent;"
         >
             <div
                 v-if="sessions.length === 0"
@@ -145,7 +150,7 @@ function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
                 @click="$emit('selectSession', session)"
             >
                 <!-- Session info -->
-                <div class="flex-1 min-w-0">
+                <div class="flex-1 min-w-0 pr-1">
                     <div class="text-sm font-medium truncate leading-5">
                         {{ getSessionTitle(session) }}
                     </div>
@@ -154,20 +159,41 @@ function handleDeleteClick(session: SessionMeta, event: MouseEvent) {
                     </div>
                 </div>
 
-                <!-- Delete button (hidden; shown in red on hover) -->
-                <button
-                    type="button"
-                    class="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 mt-0.5"
-                    title="Delete session"
-                    @click="handleDeleteClick(session, $event)"
+                <!-- Hover actions: feedback + delete
+                     Show when hovered OR when there's an existing feedback value (to keep it highlighted).
+                     The FeedbackButtons component itself highlights the selected button. -->
+                <div
+                    class="flex-shrink-0 flex items-center gap-0.5 mt-0.5 transition-opacity"
+                    :class="session.feedback !== null && session.feedback !== undefined
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100'"
+                    @click.stop
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6M14 11v6" />
-                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                    </svg>
-                </button>
+                    <!-- Feedback buttons -->
+                    <FeedbackButtons
+                        :feedback="session.feedback"
+                        size="sm"
+                        @feedback="(fb: FeedbackValue) => handleConversationFeedback(session, fb)"
+                    />
+
+                    <!-- Vertical divider -->
+                    <span class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-600 mx-0.5"></span>
+
+                    <!-- Delete button -->
+                    <button
+                        type="button"
+                        class="flex items-center justify-center w-5 h-5 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                        title="Delete session"
+                        @click="handleDeleteClick(session, $event)"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     </aside>
