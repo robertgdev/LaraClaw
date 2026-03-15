@@ -165,9 +165,10 @@ describe('MemoryRelevanceScorer', function () {
 
     describe('getWeight', function () {
         it('returns default weights', function () {
-            expect($this->scorer->getWeight('fts'))->toBe(0.4)
-                ->and($this->scorer->getWeight('temporal'))->toBe(0.3)
-                ->and($this->scorer->getWeight('importance'))->toBe(0.3);
+            expect($this->scorer->getWeight('fts'))->toBe(0.35)
+                ->and($this->scorer->getWeight('temporal'))->toBe(0.25)
+                ->and($this->scorer->getWeight('importance'))->toBe(0.20)
+                ->and($this->scorer->getWeight('feedback'))->toBe(0.25);
         });
     });
 });
