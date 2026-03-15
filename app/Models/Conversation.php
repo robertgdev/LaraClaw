@@ -88,6 +88,14 @@ class Conversation extends Model
     }
 
     /**
+     * Get memories associated with this conversation (via integer FK).
+     */
+    public function memories(): HasMany
+    {
+        return $this->hasMany(Memory::class, 'conversation_id', 'id');
+    }
+
+    /**
      * Get incoming messages for this conversation.
      */
     public function incomingMessages(): HasMany
@@ -111,6 +119,16 @@ class Conversation extends Model
         static::creating(function (Conversation $conversation) {
             if (empty($conversation->conversation_id)) {
                 $conversation->conversation_id = (string) Str::uuid();
+            }
+        });
+
+        // When a conversation is soft-deleted, soft-delete its associated memories.
+        static::deleting(function (Conversation $conversation) {
+            // Only cascade if this is a soft-delete (not a force-delete)
+            if (! $conversation->isForceDeleting()) {
+                $conversation->memories()->whereNull('deleted_at')->update([
+                    'deleted_at' => now(),
+                ]);
             }
         });
     }
@@ -467,7 +485,7 @@ class Conversation extends Model
     public function getAverageMessageFeedback(): ?float
     {
         $messagesWithFeedback = $this->messages()->whereNotNull('feedback')->get();
-        
+
         if ($messagesWithFeedback->isEmpty()) {
             return null;
         }

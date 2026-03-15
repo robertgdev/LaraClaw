@@ -13,7 +13,7 @@ namespace App\DTOs;
 final readonly class MemorySearchResultDTO
 {
     public function __construct(
-        public string $id,
+        public int $id,
         public string $content,
         public float $relevanceScore,
         public string $source,

@@ -7,6 +7,8 @@ use App\Enums\ChannelEnum;
 use App\Enums\EpisodicEventTypeEnum;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Scout\Searchable;
 
 /**
@@ -18,6 +20,8 @@ use Laravel\Scout\Searchable;
  * - Layer 3: Temporal Decay — Ebbinghaus forgetting curve + access frequency strengthening
  * - Layer 4: Feedback Score — user feedback influences memory relevance
  *
+ * @property int $id Auto-incrementing integer primary key
+ * @property int|null $conversation_id FK to conversations.id
  * @property float $search_score Runtime search score (not persisted)
  * @property float|null $feedback_score Feedback score from -1.0 to 1.0
  * @property int $feedback_count Number of feedback signals received
@@ -25,13 +29,10 @@ use Laravel\Scout\Searchable;
 class Memory extends Model
 {
     use Searchable;
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
+    use SoftDeletes;
 
     protected $fillable = [
-        'id',
+        'conversation_id',
         'sender_id',
         'channel',
         'agent_id',
@@ -55,7 +56,20 @@ class Memory extends Model
         'access_count' => 'integer',
         'created_at' => 'datetime',
         'last_accessed_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
+
+    // ==========================================
+    // Relationships
+    // ==========================================
+
+    /**
+     * The conversation this memory belongs to (if any).
+     */
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(Conversation::class);
+    }
 
     // ==========================================
     // Scout Configuration
@@ -80,11 +94,11 @@ class Memory extends Model
 
     /**
      * Determine if the model should be searchable.
+     * Soft-deleted memories are never searchable.
      */
     public function shouldBeSearchable(): bool
     {
-        // Don't index low-importance memories
-        return $this->importance >= 0.1;
+        return $this->importance >= 0.1 && ! $this->trashed();
     }
 
     // ==========================================
@@ -203,7 +217,7 @@ class Memory extends Model
      * Apply feedback to this memory.
      * Updates the feedback score using a running average.
      *
-     * @param float $feedbackValue Feedback value (-1.0 to 1.0)
+     * @param  float  $feedbackValue  Feedback value (-1.0 to 1.0)
      */
     public function applyFeedback(float $feedbackValue): void
     {

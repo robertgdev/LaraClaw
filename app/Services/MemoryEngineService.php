@@ -6,7 +6,6 @@ use App\DTOs\EpisodicEventDTO;
 use App\DTOs\MemoryConsolidationDTO;
 use App\DTOs\MemorySearchResultDTO;
 use App\Enums\ChannelEnum;
-use App\Enums\EpisodicEventTypeEnum;
 use App\Models\Memory;
 use App\Services\Memory\MemoryConsolidator;
 use App\Services\Memory\MemoryRelevanceScorer;
@@ -68,7 +67,7 @@ class MemoryEngineService
             return null;
         }
 
-        $length = (int)config('laraclaw.memory.length', 200);
+        $length = (int) config('laraclaw.memory.length', 200);
 
         // -1 means memory is disabled
         if ($length < 0) {
@@ -90,20 +89,20 @@ class MemoryEngineService
 
     /**
      * Record an episodic event.
+     *
+     * @return int The auto-incremented integer ID of the created memory record.
      */
     public function recordEvent(
         string $senderId,
         ChannelEnum $channel,
-        EpisodicEventDTO $event
-    ): string {
-        $id = (string) Str::uuid();
-
+        EpisodicEventDTO $event,
+        ?int $conversationId = null
+    ): int {
         $eventType = $event->getEventType();
-
         $importance = $event->importance ?? $eventType->defaultImportance();
 
-        Memory::create([
-            'id' => $id,
+        $memory = Memory::create([
+            'conversation_id' => $conversationId,
             'sender_id' => $senderId,
             'channel' => $channel,
             'agent_id' => $event->agentId,
@@ -115,7 +114,7 @@ class MemoryEngineService
             'last_accessed_at' => now(),
         ]);
 
-        return $id;
+        return (int) $memory->id;
     }
 
     /**
@@ -208,8 +207,10 @@ class MemoryEngineService
 
     /**
      * Strengthen a memory (bump access count).
+     *
+     * @param  int  $memoryId  Integer primary key of the memory record.
      */
-    public function reinforce(string $memoryId): void
+    public function reinforce(int $memoryId): void
     {
         Memory::where('id', $memoryId)->increment('access_count', 1, [
             'last_accessed_at' => now(),
@@ -218,8 +219,10 @@ class MemoryEngineService
 
     /**
      * Get a single episodic memory by ID.
+     *
+     * @param  int  $id  Integer primary key of the memory record.
      */
-    public function getEvent(string $id): ?Memory
+    public function getEvent(int $id): ?Memory
     {
         return Memory::find($id);
     }
