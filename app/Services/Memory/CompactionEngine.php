@@ -532,12 +532,17 @@ class CompactionEngine
 
     /**
      * Select the oldest leaf chunk (raw messages).
+     *
+     * Messages with positive feedback are preserved longer by applying
+     * a threshold reduction, making them less likely to be included
+     * in compaction chunks.
      */
     private function selectOldestLeafChunk(int $conversationId): array
     {
         $contextItems = $this->summaryStore->getContextItems($conversationId);
         $freshTailOrdinal = $this->resolveFreshTailOrdinal($contextItems);
         $threshold = $this->config['leaf_chunk_tokens'];
+        $feedbackBonus = (float) ($this->config['feedback_weight_bonus'] ?? 0.2);
 
         $chunk = [];
         $chunkTokens = 0;
@@ -568,7 +573,14 @@ class CompactionEngine
 
             $messageTokens = $this->estimateTokens($message->message ?? '');
 
-            if (count($chunk) > 0 && $chunkTokens + $messageTokens > $threshold) {
+            // Apply feedback bonus: messages with positive feedback use a lower threshold
+            // This makes them less likely to be included in the chunk, preserving them longer
+            $effectiveThreshold = $threshold;
+            if ($message->hasPositiveFeedback()) {
+                $effectiveThreshold = (int) floor($threshold * (1 - $feedbackBonus));
+            }
+
+            if (count($chunk) > 0 && $chunkTokens + $messageTokens > $effectiveThreshold) {
                 break;
             }
 

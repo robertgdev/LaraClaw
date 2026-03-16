@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Pipeline\Stages;
 
-use App\DTOs\EpisodicEventDTO;
 use App\Jobs\LosslessCompactionJob;
 use App\Models\Conversation;
 use App\Models\Event;
@@ -29,8 +28,7 @@ use Illuminate\Support\Str;
  * 2. Appends pending indicators for internal team messages
  * 3. Gets or creates the active session
  * 4. Invokes the agent (or uses direct execution result)
- * 5. Records episodic memory for external messages
- * 6. Appends message to lossless context if enabled
+ * 5. Appends message to lossless context if enabled
  */
 class AgentInvocationStage implements MessagePipelineStage
 {
@@ -107,11 +105,6 @@ class AgentInvocationStage implements MessagePipelineStage
             $context->response = $this->invokeAgent($context);
         }
 
-        // Record episodic memory
-        if (! $context->isInternal) {
-            $this->recordEpisodicEvent($context);
-        }
-
         return $context;
     }
 
@@ -177,38 +170,6 @@ class AgentInvocationStage implements MessagePipelineStage
         ]);
 
         return $response;
-    }
-
-    /**
-     * Record an episodic memory event (fire-and-forget).
-     */
-    protected function recordEpisodicEvent(MessageProcessingContext $context): void
-    {
-        if (! $this->memoryService->isEnabled()) {
-            return;
-        }
-
-        $content = $this->memoryService->truncateText('User: '.$context->processedMessage);
-        $outcome = $this->memoryService->truncateText($context->response);
-
-        // If truncation returns null, memory is disabled
-        if ($content === null || $outcome === null) {
-            return;
-        }
-
-        try {
-            $this->memoryService->recordEvent(
-                $context->message->sender_id ?? $context->message->sender,
-                $context->message->channel,
-                new EpisodicEventDTO(
-                    type: 'task_completed',
-                    content: $content,
-                    outcome: $outcome,
-                )
-            );
-        } catch (\Exception $e) {
-            \App\Logging\MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
-        }
     }
 
     /**

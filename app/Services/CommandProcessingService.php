@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DTOs\CommandResponseDTO;
-use App\DTOs\EpisodicEventDTO;
 use App\DTOs\ProcessedRoutingResultDTO;
 use App\DTOs\RoutingResultDTO;
 use App\Enums\ChannelEnum;
@@ -46,8 +45,6 @@ class CommandProcessingService
 
     protected ?RoutingService $routingService = null;
 
-    protected ?MemoryEngineService $memoryService = null;
-
     protected ConversationLifecycleService $lifecycleService;
 
     protected SlashCommandHandler $slashHandler;
@@ -68,17 +65,6 @@ class CommandProcessingService
         $this->slashHandler = new SlashCommandHandler($settings, $chatHistoryService);
         $this->channelHandler = new ChannelCommandHandler($this->slashHandler);
         $this->jsonHandler = new JsonMessageHandler($chatHistoryService);
-    }
-
-    /**
-     * Set the memory service for episodic memory recording.
-     */
-    public function setMemoryService(MemoryEngineService $memoryService): self
-    {
-        $this->memoryService = $memoryService;
-        $this->lifecycleService->setMemoryService($memoryService);
-
-        return $this;
     }
 
     /**
@@ -285,14 +271,6 @@ class CommandProcessingService
             $response,
             $agent->provider ?? null,
             $agent->model ?? null
-        );
-
-        // Record episodic memory (fire-and-forget)
-        $this->lifecycleService->recordMemory(
-            $conversation->sender_id,
-            ChannelEnum::WEBSOCKET,
-            $message,
-            $response
         );
 
         return CommandResponseDTO::agentResponse(
@@ -503,28 +481,6 @@ class CommandProcessingService
                 ]],
                 $teamId
             );
-
-            // Record episodic memory (fire-and-forget)
-            if ($this->memoryService && $this->memoryService->isEnabled()) {
-                $content = $this->memoryService->truncateText('User: '.$message);
-                $outcome = $this->memoryService->truncateText($response);
-
-                if ($content !== null && $outcome !== null) {
-                    try {
-                        $this->memoryService->recordEvent(
-                            'cli-user',
-                            ChannelEnum::CLI,
-                            EpisodicEventDTO::taskCompleted(
-                                content: $content,
-                                outcome: $outcome,
-                                agentId: $agentId,
-                            )
-                        );
-                    } catch (\Exception $e) {
-                        MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
-                    }
-                }
-            }
 
             // Build response with routing metadata
             $responseData = [

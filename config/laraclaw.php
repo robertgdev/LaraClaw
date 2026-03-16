@@ -205,21 +205,17 @@ return [
     | Memory Configuration
     |--------------------------------------------------------------------------
     |
-    | Configure episodic memory storage for the adaptive memory system.
+    | Configure the lossless memory system for hierarchical summarization.
     |
-    | memory_length controls how content is truncated before storage:
-    | - -1: Memory storage is disabled (no events recorded)
-    | - 0: Full text is stored without truncation
-    | - >0: Content is truncated to N characters
-    |
-    | lossless_enabled enables the hierarchical summarization system that
-    | preserves all messages while creating layered summaries for context
-    | management. When enabled, messages are also appended to the lossless
-    | context in addition to episodic memory.
+    | The lossless memory system preserves all original messages while creating
+    | layered summaries for efficient context management. This enables:
+    | - Complete conversation history preservation
+    | - Hierarchical summarization (leaf summaries for messages, condensed for summaries)
+    | - Token budget management with automatic compaction
+    | - Fresh tail protection for recent messages
     |
     */
     'memory' => [
-        'length' => env('LARACLAW_MEMORY_LENGTH', 0),
         'lossless_enabled' => env('LARACLAW_MEMORY_LOSSLESS', true),
         'lossless_token_budget' => env('LARACLAW_MEMORY_TOKEN_BUDGET', 100000),
         'lossless_context_threshold' => env('LARACLAW_MEMORY_CONTEXT_THRESHOLD', 0.75),

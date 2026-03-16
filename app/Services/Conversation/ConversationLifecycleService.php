@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Conversation;
 
-use App\DTOs\EpisodicEventDTO;
 use App\Enums\ChannelEnum;
-use App\Enums\EpisodicEventTypeEnum;
-use App\Logging\MultiLogger;
 use App\Models\Conversation;
-use App\Services\MemoryEngineService;
 use Illuminate\Support\Str;
 
 /**
@@ -19,25 +15,12 @@ use Illuminate\Support\Str;
  * - Finding or creating conversations
  * - Adding user messages and agent responses
  * - Updating conversation metadata (title, last message timestamp)
- * - Recording episodic memory events
  *
  * Both CommandProcessingService (WebSocket) and ProcessMessageJob (queue) delegate
  * to this service, eliminating duplicated conversation management logic.
  */
 class ConversationLifecycleService
 {
-    protected ?MemoryEngineService $memoryService = null;
-
-    /**
-     * Set the memory service for episodic memory recording.
-     */
-    public function setMemoryService(MemoryEngineService $memoryService): self
-    {
-        $this->memoryService = $memoryService;
-
-        return $this;
-    }
-
     /**
      * Find an existing conversation or create a new one.
      *
@@ -123,44 +106,6 @@ class ConversationLifecycleService
         // Update conversation metadata
         $conversation->updateDerivedTitle();
         $conversation->touchLastMessage();
-    }
-
-    /**
-     * Record an episodic memory event for the exchange.
-     *
-     * This is a fire-and-forget operation — failures are logged but not propagated.
-     */
-    public function recordMemory(
-        string $senderId,
-        ChannelEnum $channel,
-        string $userMessage,
-        string $agentResponse
-    ): void {
-        if (! $this->memoryService || ! $this->memoryService->isEnabled()) {
-            return;
-        }
-
-        $content = $this->memoryService->truncateText('User: '.$userMessage);
-        $outcome = $this->memoryService->truncateText($agentResponse);
-
-        // If truncation returns null, memory is disabled
-        if ($content === null || $outcome === null) {
-            return;
-        }
-
-        try {
-            $this->memoryService->recordEvent(
-                $senderId,
-                $channel,
-                new EpisodicEventDTO(
-                    type: EpisodicEventTypeEnum::TASK_COMPLETED,
-                    content: $content,
-                    outcome: $outcome,
-                )
-            );
-        } catch (\Exception $e) {
-            MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
-        }
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\DTOs\CompactionResultDTO;
+use App\Logging\MultiLogger;
 use App\Models\Conversation;
 use App\Services\Memory\LosslessCompactionService;
 use Illuminate\Bus\Queueable;
@@ -10,7 +11,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Job to run lossless memory compaction in the background.
@@ -65,7 +65,7 @@ class LosslessCompactionJob implements ShouldQueue
     {
         // Check if lossless memory is enabled
         if (! $service->isEnabled()) {
-            Log::warning('LosslessCompactionJob: Lossless memory is not enabled');
+            MultiLogger::warning('LosslessCompactionJob: Lossless memory is not enabled');
 
             return;
         }
@@ -74,7 +74,7 @@ class LosslessCompactionJob implements ShouldQueue
         if ($this->conversationId !== null && ! $this->compactAll) {
             $conversation = Conversation::find($this->conversationId);
             if (! $conversation) {
-                Log::error('LosslessCompactionJob: Conversation not found', [
+                MultiLogger::error('LosslessCompactionJob: Conversation not found', [
                     'conversation_id' => $this->conversationId,
                 ]);
 
@@ -93,7 +93,7 @@ class LosslessCompactionJob implements ShouldQueue
             return;
         }
 
-        Log::warning('LosslessCompactionJob: No conversation specified and compactAll is false');
+        MultiLogger::warning('LosslessCompactionJob: No conversation specified and compactAll is false');
     }
 
     /**
@@ -101,7 +101,7 @@ class LosslessCompactionJob implements ShouldQueue
      */
     protected function compactConversation(LosslessCompactionService $service, int $conversationId): void
     {
-        Log::info('LosslessCompactionJob: Starting compaction', [
+        MultiLogger::info('LosslessCompactionJob: Starting compaction', [
             'conversation_id' => $conversationId,
             'dry_run' => $this->dryRun,
         ]);
@@ -115,7 +115,7 @@ class LosslessCompactionJob implements ShouldQueue
 
             $this->logResult($result, $conversationId);
         } catch (\Exception $e) {
-            Log::error('LosslessCompactionJob: Compaction failed', [
+            MultiLogger::error('LosslessCompactionJob: Compaction failed', [
                 'conversation_id' => $conversationId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -130,14 +130,14 @@ class LosslessCompactionJob implements ShouldQueue
      */
     protected function compactAllConversations(LosslessCompactionService $service): void
     {
-        Log::info('LosslessCompactionJob: Starting batch compaction', [
+        MultiLogger::info('LosslessCompactionJob: Starting batch compaction', [
             'dry_run' => $this->dryRun,
         ]);
 
         try {
             $result = $service->compactAll($this->dryRun);
 
-            Log::info('LosslessCompactionJob: Batch compaction complete', [
+            MultiLogger::info('LosslessCompactionJob: Batch compaction complete', [
                 'compacted' => $result->compacted,
                 'skipped' => $result->skipped,
                 'errors' => $result->errors,
@@ -145,14 +145,14 @@ class LosslessCompactionJob implements ShouldQueue
 
             if ($result->hasErrors()) {
                 foreach ($result->errorDetails as $conversationId => $error) {
-                    Log::error('LosslessCompactionJob: Error in conversation', [
+                    MultiLogger::error('LosslessCompactionJob: Error in conversation', [
                         'conversation_id' => $conversationId,
                         'error' => $error,
                     ]);
                 }
             }
         } catch (\Exception $e) {
-            Log::error('LosslessCompactionJob: Batch compaction failed', [
+            MultiLogger::error('LosslessCompactionJob: Batch compaction failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -167,7 +167,7 @@ class LosslessCompactionJob implements ShouldQueue
     protected function logResult(CompactionResultDTO $result, int $conversationId): void
     {
         if ($result->actionTaken) {
-            Log::info('LosslessCompactionJob: Compaction complete', [
+            MultiLogger::info('LosslessCompactionJob: Compaction complete', [
                 'conversation_id' => $conversationId,
                 'tokens_before' => $result->tokensBefore,
                 'tokens_after' => $result->tokensAfter,
@@ -176,7 +176,7 @@ class LosslessCompactionJob implements ShouldQueue
                 'condensed' => $result->condensed,
             ]);
         } else {
-            Log::info('LosslessCompactionJob: No compaction needed', [
+            MultiLogger::info('LosslessCompactionJob: No compaction needed', [
                 'conversation_id' => $conversationId,
                 'tokens' => $result->tokensBefore,
             ]);

@@ -5,9 +5,9 @@ namespace App\Services\Memory;
 use App\DTOs\BatchCompactionResultDTO;
 use App\DTOs\CompactionResultDTO;
 use App\DTOs\IntegrityReportDTO;
+use App\Logging\MultiLogger;
 use App\Models\Conversation;
 use App\Services\MemoryEngineService;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Lossless Compaction Service.
@@ -161,7 +161,7 @@ class LosslessCompactionService
                 );
             } catch (\Exception $e) {
                 $errors[$conversationId] = $e->getMessage();
-                Log::error('Lossless compaction failed', [
+                MultiLogger::error('Lossless compaction failed', [
                     'conversation_id' => $conversationId,
                     'error' => $e->getMessage(),
                 ]);
@@ -219,7 +219,7 @@ class LosslessCompactionService
             try {
                 $reports[$conversationId] = $this->checkIntegrity($conversationId);
             } catch (\Exception $e) {
-                Log::error('Integrity check failed', [
+                MultiLogger::error('Integrity check failed', [
                     'conversation_id' => $conversationId,
                     'error' => $e->getMessage(),
                 ]);

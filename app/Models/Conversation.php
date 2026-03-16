@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ChannelEnum;
 use App\Enums\FeedbackEnum;
 use App\Enums\MessageStatusEnum;
+use App\Logging\MultiLogger;
 use App\Services\Conversation\ConversationSearchService;
 use App\Services\Conversation\ConversationSessionManager;
 use Database\Factories\ConversationFactory;
@@ -88,11 +89,19 @@ class Conversation extends Model
     }
 
     /**
-     * Get memories associated with this conversation (via integer FK).
+     * Get context items for lossless memory.
      */
-    public function memories(): HasMany
+    public function contextItems(): HasMany
     {
-        return $this->hasMany(Memory::class, 'conversation_id', 'id');
+        return $this->hasMany(ContextItem::class, 'conversation_id', 'id');
+    }
+
+    /**
+     * Get summaries for lossless memory.
+     */
+    public function summaries(): HasMany
+    {
+        return $this->hasMany(Summary::class, 'conversation_id', 'id');
     }
 
     /**
@@ -119,16 +128,6 @@ class Conversation extends Model
         static::creating(function (Conversation $conversation) {
             if (empty($conversation->conversation_id)) {
                 $conversation->conversation_id = (string) Str::uuid();
-            }
-        });
-
-        // When a conversation is soft-deleted, soft-delete its associated memories.
-        static::deleting(function (Conversation $conversation) {
-            // Only cascade if this is a soft-delete (not a force-delete)
-            if (! $conversation->isForceDeleting()) {
-                $conversation->memories()->whereNull('deleted_at')->update([
-                    'deleted_at' => now(),
-                ]);
             }
         });
     }
@@ -364,7 +363,7 @@ class Conversation extends Model
      */
     public function addUserMessage(string $message, string $sender = 'user', ?string $senderId = null, array $files = []): ConversationMessage
     {
-        \Log::debug('[Conversation::addUserMessage] Creating message', [
+        MultiLogger::debug('[Conversation::addUserMessage] Creating message', [
             'conversation_id' => $this->conversation_id,
             'channel' => $this->channel->value,
             'sender' => $sender,
@@ -380,7 +379,7 @@ class Conversation extends Model
             'files' => $files,
         ]);
 
-        \Log::debug('[Conversation::addUserMessage] Message created', [
+        MultiLogger::debug('[Conversation::addUserMessage] Message created', [
             'message_id' => $msg->id,
             'sender_id' => $msg->sender_id,
         ]);
