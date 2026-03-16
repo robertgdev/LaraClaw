@@ -1,13 +1,9 @@
 <?php
 
-use App\DTOs\EpisodicEventDTO;
 use App\Enums\ChannelEnum;
-use App\Enums\EpisodicEventTypeEnum;
 use App\Jobs\ProcessMessageJob;
 use App\Models\Agent;
 use App\Models\ConversationMessage;
-use App\Models\Memory;
-use App\Services\MemoryEngineService;
 use App\Services\Pipeline\MessageProcessingContext;
 use App\Services\Pipeline\MessageProcessingPipeline;
 use App\Services\SettingsService;
@@ -36,9 +32,6 @@ beforeEach(function () {
         'skills' => [],
         'capabilities' => ['question', 'conversation'],
     ]);
-
-    // Clean up any existing memories
-    Memory::query()->delete();
 });
 
 afterEach(function () {
@@ -50,20 +43,11 @@ afterEach(function () {
     // Clean up models
     Agent::query()->delete();
     ConversationMessage::query()->delete();
-    Memory::query()->delete();
 });
 
-describe('ProcessMessageJob Memory Integration', function () {
+describe('ProcessMessageJob Integration', function () {
     it('job class exists', function () {
         expect(class_exists(ProcessMessageJob::class))->toBeTrue();
-    });
-
-    it('job has memory service integration', function () {
-        $reflection = new ReflectionClass(ProcessMessageJob::class);
-
-        // Check that MemoryEngineService is used in the class
-        $source = file_get_contents($reflection->getFileName());
-        expect($source)->toContain('MemoryEngineService');
     });
 
     it('job uses pipeline pattern', function () {
@@ -80,17 +64,6 @@ describe('ProcessMessageJob Memory Integration', function () {
 
         expect($reflection->hasMethod('buildPipeline'))->toBeTrue();
     });
-
-    it('memory service is injected in handle method', function () {
-        $reflection = new ReflectionClass(ProcessMessageJob::class);
-        $method = $reflection->getMethod('handle');
-        $parameters = $method->getParameters();
-
-        // Check if MemoryEngineService is a parameter
-        $memoryServiceParam = collect($parameters)->firstWhere('name', 'memoryService');
-        expect($memoryServiceParam)->not->toBeNull()
-            ->and($memoryServiceParam->getType()->getName())->toBe(MemoryEngineService::class);
-    });
 });
 
 describe('MessageProcessingPipeline', function () {
@@ -105,128 +78,6 @@ describe('MessageProcessingPipeline', function () {
     it('pipeline supports adding stages', function () {
         $pipeline = new MessageProcessingPipeline;
         expect($pipeline->getStages())->toBeEmpty();
-    });
-});
-
-describe('MemoryEngineService Event Recording', function () {
-    it('records task_completed event with correct format', function () {
-        $memoryService = app(MemoryEngineService::class);
-        $senderId = 'test-sender-job';
-        $channel = ChannelEnum::TELEGRAM;
-
-        // Simulate recording an event like ProcessMessageJob would
-        $id = $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::TASK_COMPLETED,
-            content: 'User: What is the weather? → The weather is sunny.',
-            importance: 0.7,
-        ));
-
-        expect($id)->toBeInt()->toBeGreaterThan(0);
-
-        $event = $memoryService->getEvent($id);
-        expect($event)->not->toBeNull()
-            ->and($event->event_type)->toBe(EpisodicEventTypeEnum::TASK_COMPLETED)
-            ->and($event->sender_id)->toBe($senderId)
-            ->and($event->channel)->toBe($channel);
-
-        // Cleanup
-        Memory::forSender($senderId, $channel)->delete();
-    });
-
-    it('records events with user message and response', function () {
-        $memoryService = app(MemoryEngineService::class);
-        $senderId = 'test-sender-job-2';
-        $channel = ChannelEnum::TELEGRAM;
-
-        $userMessage = 'What is my timezone?';
-        $agentResponse = 'Your timezone is Europe/Berlin.';
-
-        // Record the event
-        $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::TASK_COMPLETED,
-            content: "User: {$userMessage} → {$agentResponse}",
-            importance: 0.7,
-        ));
-
-        // Verify it can be retrieved via search
-        $context = $memoryService->getContextForAgent($senderId, $channel, 'timezone');
-        // Context should contain either the search term or the event type
-        $containsRelevant = str_contains($context, 'timezone') || str_contains($context, 'Task Completed');
-        expect($containsRelevant)->toBeTrue();
-
-        // Cleanup
-        Memory::forSender($senderId, $channel)->delete();
-    });
-
-    it('isolates memories by sender and channel', function () {
-        $memoryService = app(MemoryEngineService::class);
-
-        // Record events for different users with high importance so they appear in context
-        $memoryService->recordEvent('user-telegram', ChannelEnum::TELEGRAM, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::CORRECTION,
-            content: 'Telegram user fact',
-            importance: 0.9,
-        ));
-
-        $memoryService->recordEvent('user-discord', ChannelEnum::DISCORD, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::CORRECTION,
-            content: 'Discord user fact',
-            importance: 0.9,
-        ));
-
-        $memoryService->recordEvent('user-telegram', ChannelEnum::DISCORD, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::CORRECTION,
-            content: 'Same user different channel',
-            importance: 0.9,
-        ));
-
-        // Verify isolation - check that each context contains only the right memories
-        $telegramContext = $memoryService->getContextForAgent('user-telegram', ChannelEnum::TELEGRAM);
-        $discordContext = $memoryService->getContextForAgent('user-discord', ChannelEnum::DISCORD);
-        $mixedContext = $memoryService->getContextForAgent('user-telegram', ChannelEnum::DISCORD);
-
-        // Each context should contain its own memory
-        expect($telegramContext)->toContain('Telegram user fact')
-            ->and($discordContext)->toContain('Discord user fact')
-            ->and($mixedContext)->toContain('Same user different channel');
-
-        // Telegram context should NOT contain Discord user's fact
-        expect($telegramContext)->not->toContain('Discord user fact');
-
-        // Cleanup
-        Memory::forSender('user-telegram', ChannelEnum::TELEGRAM)->delete();
-        Memory::forSender('user-discord', ChannelEnum::DISCORD)->delete();
-        Memory::forSender('user-telegram', ChannelEnum::DISCORD)->delete();
-    });
-});
-
-describe('Memory Context Format', function () {
-    it('formats memory context for agent prompt', function () {
-        $memoryService = app(MemoryEngineService::class);
-        $senderId = 'test-format-sender';
-        $channel = ChannelEnum::TELEGRAM;
-
-        // Add various types of memories
-        $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::CORRECTION,
-            content: 'Always use TypeScript strict mode',
-            importance: 0.9,
-        ));
-
-        $memoryService->recordEvent($senderId, $channel, new EpisodicEventDTO(
-            type: EpisodicEventTypeEnum::PREFERENCE_LEARNED,
-            content: 'User prefers dark mode',
-            importance: 0.8,
-        ));
-
-        $context = $memoryService->getContextForAgent($senderId, $channel);
-
-        // Context should contain formatted sections
-        expect($context)->toBeString()
-            ->and(strlen($context))->toBeGreaterThan(0);
-
-        // Cleanup
-        Memory::forSender($senderId, $channel)->delete();
     });
 });
 

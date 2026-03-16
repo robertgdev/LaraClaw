@@ -3,7 +3,6 @@
 use App\Enums\ChannelEnum;
 use App\Models\Conversation;
 use App\Services\Conversation\ConversationLifecycleService;
-use App\Services\MemoryEngineService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -127,44 +126,6 @@ describe('ConversationLifecycleService', function () {
 
             $conversation->refresh();
             expect($conversation->total_messages)->toBe(2);
-        });
-    });
-
-    describe('recordMemory', function () {
-        it('does nothing when memory service is not set', function () {
-            // Should not throw
-            $this->service->recordMemory(
-                'test-sender',
-                ChannelEnum::WEBSOCKET,
-                'user message',
-                'agent response'
-            );
-
-            expect(true)->toBeTrue(); // No exception thrown
-        });
-
-        it('records memory when service is set', function () {
-            $memoryService = app(MemoryEngineService::class);
-            $this->service->setMemoryService($memoryService);
-
-            // Should not throw
-            $this->service->recordMemory(
-                'test-sender-lifecycle',
-                ChannelEnum::WEBSOCKET,
-                'test user message',
-                'test agent response'
-            );
-
-            expect(true)->toBeTrue(); // No exception thrown
-        });
-    });
-
-    describe('setMemoryService', function () {
-        it('returns self for fluent chaining', function () {
-            $memoryService = app(MemoryEngineService::class);
-            $result = $this->service->setMemoryService($memoryService);
-
-            expect($result)->toBe($this->service);
         });
     });
 });
