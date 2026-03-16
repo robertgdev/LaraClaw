@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, type PropType } from 'vue';
-import { cn } from '@/lib/utils';
-import Button from '@/components/ui/Button.vue';
+import { computed  } from 'vue';
+import type {PropType} from 'vue';
 import Collapsible from '@/components/ui/Collapsible.vue';
+import { cn } from '@/lib/utils';
 import type { ToolPart } from '@/types/chat';
 
 const props = defineProps({

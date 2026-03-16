@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
-import ChatSidebar from '@/components/chat/ChatSidebar.vue';
-import ChatMessageList from '@/components/chat/ChatMessageList.vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import ChatComposer from '@/components/chat/ChatComposer.vue';
-import { useChatSettingsStore, applyTheme } from '@/stores/chatSettings';
-import { useAuthStore } from '@/stores/auth';
+import ChatMessageList from '@/components/chat/ChatMessageList.vue';
+import ChatSidebar from '@/components/chat/ChatSidebar.vue';
 import { useChatStream } from '@/composables/useChatStream';
-import type { SessionMeta, GatewayMessage, AttachmentFile, FeedbackValue } from '@/types/chat';
 import { createOptimisticMessage, readError, deriveFriendlyIdFromKey } from '@/lib/chat-utils';
 import { randomUUID } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth';
+import { useChatSettingsStore, applyTheme } from '@/stores/chatSettings';
+import type { SessionMeta, GatewayMessage, AttachmentFile, FeedbackValue } from '@/types/chat';
 
 const props = defineProps<{ sessionKey?: string }>();
 

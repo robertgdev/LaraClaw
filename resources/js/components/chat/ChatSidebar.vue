@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, type PropType } from 'vue';
-import type { SessionMeta, FeedbackValue } from '@/types/chat';
+import { ref  } from 'vue';
+import type {PropType} from 'vue';
 import { textFromMessage } from '@/lib/chat-utils';
+import type { SessionMeta, FeedbackValue } from '@/types/chat';
 import FeedbackButtons from './FeedbackButtons.vue';
 
 // ── Local state for delete confirmation ──
@@ -26,7 +27,7 @@ function confirmDelete() {
     pendingDeleteSession.value = null;
 }
 
-const props = defineProps({
+defineProps({
     sessions: {
         type: Array as PropType<SessionMeta[]>,
         required: true,

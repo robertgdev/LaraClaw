@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { Head } from '@inertiajs/vue3';
+import { ref, onMounted } from 'vue';
+import Button from '@/components/ui/Button.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useChatSettingsStore, applyTheme } from '@/stores/chatSettings';
-import Button from '@/components/ui/Button.vue';
 
 const authStore = useAuthStore();
 const settingsStore = useChatSettingsStore();
@@ -118,7 +118,7 @@ function validateTokenWithWebSocket(host: string, port: number, token: string): 
                     cleanup();
                     resolve({ valid: false, error: data.message || 'Authentication failed' });
                 }
-            } catch (e) {
+            } catch {
                 // Ignore parse errors for non-JSON messages
             }
         };

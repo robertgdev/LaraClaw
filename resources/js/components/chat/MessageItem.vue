@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, type PropType } from 'vue';
-import type { GatewayMessage, ToolPart, FeedbackValue } from '@/types/chat';
-import { textFromMessage, getToolCallsFromMessage, getMessageTimestamp } from '@/lib/chat-utils';
-import { useChatSettingsStore } from '@/stores/chatSettings';
+import { computed  } from 'vue';
+import type {PropType} from 'vue';
+import { textFromMessage, getMessageTimestamp } from '@/lib/chat-utils';
 import { renderMarkdown } from '@/lib/markdown';
-import Tool from './Tool.vue';
-import Thinking from './Thinking.vue';
+import { useChatSettingsStore } from '@/stores/chatSettings';
+import type { GatewayMessage, ToolPart, FeedbackValue } from '@/types/chat';
 import FeedbackButtons from './FeedbackButtons.vue';
+import Thinking from './Thinking.vue';
+import Tool from './Tool.vue';
 
 const props = defineProps({
     message: {

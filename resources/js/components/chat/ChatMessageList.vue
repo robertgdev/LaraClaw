@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick, type PropType } from 'vue';
-import type { GatewayMessage, FeedbackValue } from '@/types/chat';
+import { ref, computed, watch, onMounted, nextTick  } from 'vue';
+import type {PropType} from 'vue';
 import { getToolCallsFromMessage } from '@/lib/chat-utils';
 import { useChatSettingsStore } from '@/stores/chatSettings';
+import type { GatewayMessage, FeedbackValue } from '@/types/chat';
 import MessageItem from './MessageItem.vue';
 
 const props = defineProps({
@@ -16,7 +17,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits<{
+defineEmits<{
     feedback: [messageId: string, feedback: FeedbackValue];
 }>();
 

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { type PropType } from 'vue';
-import { cn } from '@/lib/utils';
 import Collapsible from '@/components/ui/Collapsible.vue';
+import { cn } from '@/lib/utils';
 
 defineProps({
     content: {

@@ -1,8 +1,8 @@
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import { createPinia } from 'pinia';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
-import { createPinia } from 'pinia';
 import '../css/app.css';
 
 const appName = import.meta.env.VITE_APP_NAME || 'LaraClaw';

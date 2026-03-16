@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { GatewayMessage, SessionMeta, HistoryResponse } from '@/types/chat';
 import { normalizeSessions, readError, deriveFriendlyIdFromKey } from '@/lib/chat-utils';
 import { randomUUID } from '@/lib/utils';
+import type { GatewayMessage, SessionMeta, HistoryResponse } from '@/types/chat';
 
 export const useChatStore = defineStore('chat', () => {
     // State
@@ -14,9 +14,6 @@ export const useChatStore = defineStore('chat', () => {
     const isSending = ref(false);
     const error = ref<string | null>(null);
     const isSidebarCollapsed = ref(false);
-
-    // Pending send state (for optimistic updates)
-    const pendingSends = ref<Map<string, { message: string; optimisticMessage: GatewayMessage }>>(new Map());
 
     // Getters
     const currentMessages = computed(() => {
