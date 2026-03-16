@@ -115,13 +115,14 @@ class PromptBuilderService
             }
         }
 
-        // 5. Memory context (episodic + key-value memory)
+        // 5. Memory context (episodic + key-value memory + lossless)
         if ($this->memoryService !== null && ! empty($options['sender_id']) && ! empty($options['channel'])) {
             $memoryBuilder = new MemoryContextBuilder($this->memoryService);
             $memoryContext = $memoryBuilder->build(
                 $options['sender_id'],
                 $options['channel'],
-                $options['message'] ?? null
+                $options['message'] ?? null,
+                $options['conversation_id'] ?? null
             );
             if ($memoryContext !== null) {
                 $sections['memory'] = $memoryContext;

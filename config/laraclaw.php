@@ -212,9 +212,18 @@ return [
     | - 0: Full text is stored without truncation
     | - >0: Content is truncated to N characters
     |
+    | lossless_enabled enables the hierarchical summarization system that
+    | preserves all messages while creating layered summaries for context
+    | management. When enabled, messages are also appended to the lossless
+    | context in addition to episodic memory.
+    |
     */
     'memory' => [
-        'length' => env('LARACLAW_MEMORY_LENGTH', 200),
+        'length' => env('LARACLAW_MEMORY_LENGTH', 0),
+        'lossless_enabled' => env('LARACLAW_MEMORY_LOSSLESS', true),
+        'lossless_token_budget' => env('LARACLAW_MEMORY_TOKEN_BUDGET', 100000),
+        'lossless_context_threshold' => env('LARACLAW_MEMORY_CONTEXT_THRESHOLD', 0.75),
+        'lossless_fresh_tail' => env('LARACLAW_MEMORY_FRESH_TAIL', 8),
     ],
 
     /*
