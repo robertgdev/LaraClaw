@@ -7,6 +7,7 @@ use App\DTOs\SkillFileDTO;
 use App\DTOs\SkillSyncResultDTO;
 use App\Services\Skills\SkillChecksumCalculator;
 use App\Services\Skills\SkillSyncService;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use App\TypedCollections\SkillFileDTOCollection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -270,9 +271,9 @@ class Skill extends Model
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array<string, \App\DTOs\ParsedSkillDTO>  $indexedSkills  Skills from SkillSearchService::indexSkills()
+     * @param  \App\TypedCollections\ParsedSkillDTOCollection  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
-    public static function syncFromIndex(array $indexedSkills): SkillSyncResultDTO
+    public static function syncFromIndex(ParsedSkillDTOCollection $indexedSkills): SkillSyncResultDTO
     {
         /** @var SkillSyncService $syncService */
         $syncService = app(SkillSyncService::class);

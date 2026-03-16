@@ -104,7 +104,7 @@ class SkillClassificationService
 
         MultiLogger::info('Synced skills from filesystem', $syncStats->toArray());
 
-        if (empty($indexedSkills)) {
+        if ($indexedSkills->isEmpty()) {
             MultiLogger::warning('No skills found to classify');
 
             return new SkillClassificationResultDTO(

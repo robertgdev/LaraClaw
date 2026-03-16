@@ -1,10 +1,12 @@
 <?php
 
+use App\DTOs\ParsedSkillDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
 use App\Services\SettingsService;
 use App\Services\SkillClassificationService;
 use App\Services\SkillSearchService;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\Cache;
 
 beforeEach(function () {
@@ -418,7 +420,7 @@ JSON;
             $mockSkillService = Mockery::mock(SkillSearchService::class);
             $mockSkillService->shouldReceive('indexSkills')
                 ->once()
-                ->andReturn([]);
+                ->andReturn(new ParsedSkillDTOCollection([]));
 
             $service = new SkillClassificationService($this->settings, $mockSkillService);
 
@@ -460,7 +462,7 @@ JSON;
             $mockSkillService = Mockery::mock(SkillSearchService::class);
             $mockSkillService->shouldReceive('indexSkills')
                 ->once()
-                ->andReturn([]);
+                ->andReturn(new ParsedSkillDTOCollection([]));
 
             $service = new SkillClassificationService($this->settings, $mockSkillService);
 
@@ -487,7 +489,7 @@ JSON;
             $mockSkillService = Mockery::mock(SkillSearchService::class);
             $mockSkillService->shouldReceive('indexSkills')
                 ->once()
-                ->andReturn([]);
+                ->andReturn(new ParsedSkillDTOCollection([]));
 
             $service = new SkillClassificationService($this->settings, $mockSkillService);
 
@@ -524,17 +526,19 @@ JSON;
             $mockSkillService = Mockery::mock(SkillSearchService::class);
             $mockSkillService->shouldReceive('indexSkills')
                 ->once()
-                ->andReturn([
-                    'classified-skill' => [
-                        'name' => 'classified-skill',
-                        'dir_name' => 'classified-skill',
-                        'path' => $tempDir,
-                        'directory' => $tempDir,
-                        'source_type' => 'core',
-                        'description' => 'Classified skill',
-                        'keywords' => [],
-                    ],
-                ]);
+                ->andReturn(new ParsedSkillDTOCollection([
+                    new ParsedSkillDTO(
+                        name: 'classified-skill',
+                        dirName: 'classified-skill',
+                        description: 'Classified skill',
+                        path: $tempDir.'/SKILL.md',
+                        directory: $tempDir,
+                        keywords: [],
+                        hasScripts: false,
+                        hasReferences: false,
+                        hasAssets: false,
+                    ),
+                ]));
 
             $service = new SkillClassificationService($this->settings, $mockSkillService);
 

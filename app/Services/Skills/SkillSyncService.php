@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
-use App\DTOs\ParsedSkillDTO;
 use App\DTOs\SkillSyncResultDTO;
 use App\Logging\MultiLogger;
 use App\Models\Skill;
+use App\TypedCollections\ParsedSkillDTOCollection;
 
 /**
  * Syncs skills from the filesystem index to the database.
@@ -25,16 +25,16 @@ class SkillSyncService
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array<string, ParsedSkillDTO>  $indexedSkills  Skills from SkillSearchService::indexSkills()
+     * @param  ParsedSkillDTOCollection  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
-    public function syncFromIndex(array $indexedSkills): SkillSyncResultDTO
+    public function syncFromIndex(ParsedSkillDTOCollection $indexedSkills): SkillSyncResultDTO
     {
         $created = 0;
         $updated = 0;
 
         $seenNames = [];
-        foreach ($indexedSkills as $skillName => $skillData) {
-            $seenNames[] = $skillName;
+        foreach ($indexedSkills as $skillData) {
+            $seenNames[] = $skillData->name;
             $checksum = $this->checksumCalculator->calculate($skillData->directory);
 
             // Base attributes
@@ -52,7 +52,7 @@ class SkillSyncService
             ];
 
             // Check existing skill before updating to preserve classification state
-            $existing = Skill::where('name', $skillName)->first();
+            $existing = Skill::where('name', $skillData->name)->first();
             $isNew = $existing === null;
             $checksumChanged = $existing !== null && $existing->checksum !== $checksum;
 
@@ -62,7 +62,7 @@ class SkillSyncService
             }
 
             $skill = Skill::updateOrCreate(
-                ['name' => $skillName],
+                ['name' => $skillData->name],
                 $attributes
             );
 

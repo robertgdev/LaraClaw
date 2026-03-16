@@ -10,6 +10,7 @@ use App\DTOs\SkillSearchResultDTO;
 use App\Services\Skills\SkillFileParser;
 use App\Services\Skills\SkillIndexer;
 use App\Services\Skills\SkillMatchCache;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use App\TypedCollections\SkillDTOCollection;
 use App\TypedCollections\SkillFileDTOCollection;
 use App\TypedCollections\SkillSearchResultDTOCollection;
@@ -33,8 +34,7 @@ class SkillSearchService
 
     protected SkillMatchCache $matchCache;
 
-    /** @var array<string, ParsedSkillDTO> */
-    protected array $skillIndex = [];
+    protected ParsedSkillDTOCollection $skillIndex;
 
     public function __construct(SettingsService $settings, ?SkillIndexer $indexer = null, ?SkillFileParser $parser = null, ?SkillMatchCache $matchCache = null)
     {
@@ -46,10 +46,8 @@ class SkillSearchService
 
     /**
      * Index all skills from all directories (respecting priority order).
-     *
-     * @return array<string, ParsedSkillDTO>
      */
-    public function indexSkills(): array
+    public function indexSkills(): ParsedSkillDTOCollection
     {
         $this->skillIndex = $this->indexer->indexSkills();
 
@@ -81,14 +79,14 @@ class SkillSearchService
      */
     public function search(string $query, int $limit = 5): SkillSearchResultDTOCollection
     {
-        if (empty($this->skillIndex)) {
+        if (! isset($this->skillIndex)) {
             $this->indexSkills();
         }
 
         $queryKeywords = $this->extractKeywords($query);
         $results = [];
 
-        foreach ($this->skillIndex as $skillName => $skill) {
+        foreach ($this->skillIndex as $skill) {
             $score = 0;
             $matchedKeywords = [];
 
@@ -109,7 +107,7 @@ class SkillSearchService
             }
 
             // Direct name match
-            if (str_contains(strtolower($skillName), strtolower($query))) {
+            if (str_contains(strtolower($skill->name), strtolower($query))) {
                 $score += 5;
             }
 
@@ -144,16 +142,15 @@ class SkillSearchService
      */
     public function getAllSkills(): SkillDTOCollection
     {
-        if (empty($this->skillIndex)) {
+        if (! isset($this->skillIndex)) {
             $this->indexSkills();
         }
 
-        $skills = array_map(
-            fn (ParsedSkillDTO $skill) => $skill->toSkillDTO(),
-            $this->skillIndex
+        $skills = $this->skillIndex->map(
+            fn (ParsedSkillDTO $skill) => $skill->toSkillDTO()
         );
 
-        return new SkillDTOCollection(array_values($skills));
+        return new SkillDTOCollection($skills->values()->all());
     }
 
     /**
@@ -161,11 +158,11 @@ class SkillSearchService
      */
     public function getSkill(string $name): ?SkillDTO
     {
-        if (empty($this->skillIndex)) {
+        if (! isset($this->skillIndex)) {
             $this->indexSkills();
         }
 
-        $parsed = $this->skillIndex[$name] ?? null;
+        $parsed = $this->skillIndex->findByName($name);
 
         return $parsed?->toSkillDTO();
     }
@@ -227,12 +224,9 @@ class SkillSearchService
 
     /**
      * Refresh the skill index.
-     *
-     * @return array<string, ParsedSkillDTO>
      */
-    public function refreshIndex(): array
+    public function refreshIndex(): ParsedSkillDTOCollection
     {
-        $this->skillIndex = [];
         $this->skillIndex = $this->indexer->refreshIndex();
 
         return $this->skillIndex;

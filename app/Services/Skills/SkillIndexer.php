@@ -7,6 +7,7 @@ namespace App\Services\Skills;
 use App\DTOs\ParsedSkillDTO;
 use App\Logging\MultiLogger;
 use App\Services\SettingsService;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
@@ -59,18 +60,18 @@ class SkillIndexer
 
     /**
      * Index all skills from all directories (respecting priority order).
-     *
-     * @return array<string, ParsedSkillDTO> Keyed by skill name
      */
-    public function indexSkills(): array
+    public function indexSkills(): ParsedSkillDTOCollection
     {
         $cached = Cache::get($this->cacheKey);
         if ($cached) {
             // Reconstruct DTOs from cached array data
-            return array_map(
+            $skills = array_map(
                 fn (array $data) => ParsedSkillDTO::fromArray($data),
                 $cached
             );
+
+            return ParsedSkillDTOCollection::fromKeyedArray($skills);
         }
 
         $index = [];
@@ -103,15 +104,13 @@ class SkillIndexer
 
         MultiLogger::info('Indexed '.count($index).' skills');
 
-        return $index;
+        return ParsedSkillDTOCollection::fromKeyedArray($index);
     }
 
     /**
      * Refresh the skill index (clear cache and reindex).
-     *
-     * @return array<string, ParsedSkillDTO>
      */
-    public function refreshIndex(): array
+    public function refreshIndex(): ParsedSkillDTOCollection
     {
         Cache::forget($this->cacheKey);
 
