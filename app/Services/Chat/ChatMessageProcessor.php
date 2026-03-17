@@ -8,6 +8,7 @@ use App\Logging\MultiLogger;
 use App\Models\Event;
 use App\Services\AgentInvokerService;
 use App\Services\ConversationHistoryService;
+use App\Services\MemoryEngineService;
 use App\Services\SettingsService;
 use Illuminate\Console\OutputStyle;
 
@@ -23,6 +24,8 @@ class ChatMessageProcessor
 {
     protected string $senderId = 'cli-user';
 
+    protected ?MemoryEngineService $memoryService = null;
+
     public function __construct(
         protected SettingsService $settings,
         protected AgentInvokerService $invokerService,
@@ -36,6 +39,17 @@ class ChatMessageProcessor
     public function setSenderId(string $senderId): self
     {
         $this->senderId = $senderId;
+
+        return $this;
+    }
+
+    /**
+     * Set the memory service for lossless context tracking.
+     */
+    public function setMemoryService(MemoryEngineService $memoryService): self
+    {
+        $this->memoryService = $memoryService;
+        $this->chatHistoryService->setMemoryService($memoryService);
 
         return $this;
     }

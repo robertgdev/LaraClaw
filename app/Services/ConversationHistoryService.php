@@ -24,11 +24,23 @@ class ConversationHistoryService
 
     protected bool $exportToFiles;
 
+    protected ?MemoryEngineService $memoryService = null;
+
     public function __construct(SettingsService $settings)
     {
         $this->settings = $settings;
         $this->chatsDir = config('laraclaw.workspace.path').'/chats';
         $this->exportToFiles = config('laraclaw.chat_history.export_to_files', false);
+    }
+
+    /**
+     * Set the memory service for lossless context tracking.
+     */
+    public function setMemoryService(MemoryEngineService $memoryService): self
+    {
+        $this->memoryService = $memoryService;
+
+        return $this;
     }
 
     /**
@@ -68,22 +80,30 @@ class ConversationHistoryService
             'team_id' => $teamId,
         ]);
 
+        // Collect message IDs for lossless context
+        $messageIds = [];
+
         // Add user message with sender_id
-        $conversation->addUserMessage($userMessage, $sender, $senderId, $files);
+        $userMsg = $conversation->addUserMessage($userMessage, $sender, $senderId, $files);
+        $messageIds[] = $userMsg->id;
 
         // Add each agent response
         foreach ($responses as $response) {
-            $conversation->addAgentResponse(
+            $agentMsg = $conversation->addAgentResponse(
                 $response['agentId'] ?? 'unknown',
                 $response['agentName'] ?? 'Agent',
                 $response['response'] ?? '',
                 $response['provider'] ?? null,
                 $response['model'] ?? null
             );
+            $messageIds[] = $agentMsg->id;
         }
 
         // Mark conversation as completed
         $conversation->markCompleted();
+
+        // Append to lossless context if enabled
+        $this->appendToLosslessContext($conversation->id, $messageIds);
 
         // Optionally export to file for backup
         if ($this->exportToFiles) {
@@ -91,6 +111,26 @@ class ConversationHistoryService
         }
 
         return $conversation->conversation_id;
+    }
+
+    /**
+     * Append messages to lossless context if enabled.
+     *
+     * @param  int  $conversationId  The conversation ID (primary key)
+     * @param  array<int>  $messageIds  Array of message IDs to append
+     */
+    protected function appendToLosslessContext(int $conversationId, array $messageIds): void
+    {
+        if ($this->memoryService === null) {
+            return;
+        }
+
+        if (! $this->memoryService->isLosslessEnabled()) {
+            return;
+        }
+
+        // Append all messages to the context
+        $this->memoryService->appendMessagesToContext($conversationId, $messageIds);
     }
 
     /**

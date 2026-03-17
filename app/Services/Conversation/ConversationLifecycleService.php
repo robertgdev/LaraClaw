@@ -6,6 +6,7 @@ namespace App\Services\Conversation;
 
 use App\Enums\ChannelEnum;
 use App\Models\Conversation;
+use App\Services\MemoryEngineService;
 use Illuminate\Support\Str;
 
 /**
@@ -21,6 +22,18 @@ use Illuminate\Support\Str;
  */
 class ConversationLifecycleService
 {
+    protected ?MemoryEngineService $memoryService = null;
+
+    /**
+     * Set the memory service for lossless context tracking.
+     */
+    public function setMemoryService(MemoryEngineService $memoryService): self
+    {
+        $this->memoryService = $memoryService;
+
+        return $this;
+    }
+
     /**
      * Find an existing conversation or create a new one.
      *
@@ -87,7 +100,7 @@ class ConversationLifecycleService
         ?string $model = null
     ): void {
         // Add user message
-        $conversation->addUserMessage(
+        $userMsg = $conversation->addUserMessage(
             $userMessage,
             'user',
             $conversation->sender_id,
@@ -95,7 +108,7 @@ class ConversationLifecycleService
         );
 
         // Add agent response
-        $conversation->addAgentResponse(
+        $agentMsg = $conversation->addAgentResponse(
             $agentId,
             $agentName,
             $agentResponse,
@@ -106,6 +119,26 @@ class ConversationLifecycleService
         // Update conversation metadata
         $conversation->updateDerivedTitle();
         $conversation->touchLastMessage();
+
+        // Append to lossless context if memory service is available
+        $this->appendToLosslessContext($conversation->id, $userMsg->id, $agentMsg->id);
+    }
+
+    /**
+     * Append messages to lossless context if enabled.
+     */
+    protected function appendToLosslessContext(int $conversationId, int $userMessageId, int $agentMessageId): void
+    {
+        if ($this->memoryService === null) {
+            return;
+        }
+
+        if (! $this->memoryService->isLosslessEnabled()) {
+            return;
+        }
+
+        // Append both messages to the context
+        $this->memoryService->appendMessagesToContext($conversationId, [$userMessageId, $agentMessageId]);
     }
 
     /**

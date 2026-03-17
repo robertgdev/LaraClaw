@@ -13,6 +13,7 @@ use App\Services\Commands\ChannelCommandHandler;
 use App\Services\Commands\JsonMessageHandler;
 use App\Services\Commands\SlashCommandHandler;
 use App\Services\Conversation\ConversationLifecycleService;
+use App\Services\MemoryEngineService;
 use function Safe\json_decode;
 use function Safe\preg_match;
 
@@ -73,6 +74,17 @@ class CommandProcessingService
     public function setRoutingService(RoutingService $routingService): self
     {
         $this->routingService = $routingService;
+
+        return $this;
+    }
+
+    /**
+     * Set the memory service (optional, for memory context in prompts).
+     */
+    public function setMemoryService(MemoryEngineService $memoryService): self
+    {
+        $this->invokerService->setMemoryService($memoryService);
+        $this->lifecycleService->setMemoryService($memoryService);
 
         return $this;
     }
