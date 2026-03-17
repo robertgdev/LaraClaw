@@ -1,14 +1,17 @@
 <?php
 
 use App\Enums\ChannelEnum;
+use App\Models\ContextItem;
 use App\Models\Conversation;
 use App\Services\Conversation\ConversationLifecycleService;
+use App\Services\MemoryEngineService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->service = new ConversationLifecycleService;
+    $this->memoryService = app(MemoryEngineService::class);
 });
 
 describe('ConversationLifecycleService', function () {
@@ -126,6 +129,66 @@ describe('ConversationLifecycleService', function () {
 
             $conversation->refresh();
             expect($conversation->total_messages)->toBe(2);
+        });
+
+        it('creates context items when memory service is injected', function () {
+            $conversation = Conversation::create([
+                'conversation_id' => 'context-item-test',
+                'channel' => ChannelEnum::WEBSOCKET,
+                'sender' => 'user',
+                'sender_id' => 'ws_test',
+                'is_active' => true,
+            ]);
+
+            // Inject memory service to enable context item creation
+            $this->service->setMemoryService($this->memoryService);
+
+            $this->service->recordExchange(
+                $conversation,
+                'Hello agent',
+                'assistant',
+                'Assistant',
+                'Hello user!',
+                'openai',
+                'gpt-4'
+            );
+
+            $conversation->refresh();
+
+            // Verify context items were created
+            $contextItems = ContextItem::forConversation($conversation->id)->ordered()->get();
+            expect($contextItems)->toHaveCount(2)
+                ->and($contextItems[0]->item_type)->toBe('message')
+                ->and($contextItems[0]->ordinal)->toBe(0)
+                ->and($contextItems[1]->item_type)->toBe('message')
+                ->and($contextItems[1]->ordinal)->toBe(1);
+        });
+
+        it('does not create context items when memory service is not injected', function () {
+            $conversation = Conversation::create([
+                'conversation_id' => 'no-context-item-test',
+                'channel' => ChannelEnum::WEBSOCKET,
+                'sender' => 'user',
+                'sender_id' => 'ws_test',
+                'is_active' => true,
+            ]);
+
+            // Do NOT inject memory service
+            $this->service->recordExchange(
+                $conversation,
+                'Hello agent',
+                'assistant',
+                'Assistant',
+                'Hello user!',
+                'openai',
+                'gpt-4'
+            );
+
+            $conversation->refresh();
+
+            // Verify no context items were created
+            $contextItems = ContextItem::forConversation($conversation->id)->get();
+            expect($contextItems)->toHaveCount(0);
         });
     });
 });
