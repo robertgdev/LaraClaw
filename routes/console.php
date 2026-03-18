@@ -7,7 +7,7 @@ Schedule::command('laraclaw:memory:consolidate')
     ->onOneServer();
 
 Schedule::command('backup:run')
-        ->dailyAt('04:00')
-        ->runInBackground()
-        ->withoutOverlapping()
-        ->onOneServer();
+    ->dailyAt('04:00')
+    ->runInBackground()
+    ->withoutOverlapping()
+    ->onOneServer();
