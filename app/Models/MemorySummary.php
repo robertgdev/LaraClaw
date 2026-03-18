@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -69,6 +70,8 @@ class MemorySummary extends Model
 
     /**
      * The conversation this summary belongs to.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
     public function conversation(): BelongsTo
     {
@@ -139,32 +142,44 @@ class MemorySummary extends Model
 
     /**
      * Scope for leaf summaries (depth 0).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeLeaf($query)
+    public function scopeLeaf(Builder $query): Builder
     {
         return $query->where('kind', 'leaf');
     }
 
     /**
      * Scope for condensed summaries (depth 1+).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeCondensed($query)
+    public function scopeCondensed(Builder $query): Builder
     {
         return $query->where('kind', 'condensed');
     }
 
     /**
      * Scope for specific depth.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeAtDepth($query, int $depth)
+    public function scopeAtDepth(Builder $query, int $depth): Builder
     {
         return $query->where('depth', $depth);
     }
 
     /**
      * Scope for summaries in a conversation.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeForConversation($query, int $conversationId)
+    public function scopeForConversation(Builder $query, int $conversationId): Builder
     {
         return $query->where('conversation_id', $conversationId);
     }

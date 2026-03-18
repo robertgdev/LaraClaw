@@ -24,6 +24,9 @@ class Log extends Model
 
     /**
      * Scope for filtering by log level.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeByLevel(Builder $query, string $level): Builder
     {
@@ -32,6 +35,9 @@ class Log extends Model
 
     /**
      * Scope for errors and above.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeErrors(Builder $query): Builder
     {
@@ -40,6 +46,9 @@ class Log extends Model
 
     /**
      * Scope for recent logs.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeRecent(Builder $query, int $hours = 24): Builder
     {

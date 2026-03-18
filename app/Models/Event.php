@@ -34,6 +34,9 @@ class Event extends Model
 
     /**
      * Scope for specific event type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeOfType(Builder $query, string $type): Builder
     {
@@ -42,6 +45,9 @@ class Event extends Model
 
     /**
      * Scope for recent events.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeRecent(Builder $query, int $minutes = 60): Builder
     {

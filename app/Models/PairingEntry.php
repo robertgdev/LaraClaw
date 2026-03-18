@@ -41,6 +41,8 @@ class PairingEntry extends Model
 
     /**
      * Get all messages from this paired sender.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function messages(): HasMany
     {
@@ -49,6 +51,8 @@ class PairingEntry extends Model
 
     /**
      * Get all conversations from this paired sender.
+     *
+     * @return HasMany<Conversation, $this>
      */
     public function conversations(): HasMany
     {
@@ -57,6 +61,9 @@ class PairingEntry extends Model
 
     /**
      * Scope for pending entries.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopePending(Builder $query): Builder
     {
@@ -65,6 +72,9 @@ class PairingEntry extends Model
 
     /**
      * Scope for approved entries.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeApproved(Builder $query): Builder
     {
@@ -73,6 +83,9 @@ class PairingEntry extends Model
 
     /**
      * Scope for specific channel.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {

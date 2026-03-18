@@ -83,6 +83,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the agent this message belongs to.
+     *
+     * @return BelongsTo<Agent, $this>
      */
     public function agent(): BelongsTo
     {
@@ -91,6 +93,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the conversation this message belongs to.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
     public function conversation(): BelongsTo
     {
@@ -99,6 +103,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the message this is a reply to.
+     *
+     * @return BelongsTo<ConversationMessage, $this>
      */
     public function replyTo(): BelongsTo
     {
@@ -134,6 +140,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for incoming messages (from users).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeIncoming(Builder $query): Builder
     {
@@ -142,6 +151,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for outgoing messages (from agents).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeOutgoing(Builder $query): Builder
     {
@@ -150,6 +162,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for pending messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopePending(Builder $query): Builder
     {
@@ -158,6 +173,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for processing messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeProcessing(Builder $query): Builder
     {
@@ -166,6 +184,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for completed messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeCompleted(Builder $query): Builder
     {
@@ -174,6 +195,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for failed messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeFailed(Builder $query): Builder
     {
@@ -182,6 +206,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for incoming queue type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeQueueIncoming(Builder $query): Builder
     {
@@ -190,6 +217,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for outgoing queue type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeQueueOutgoing(Builder $query): Builder
     {
@@ -198,6 +228,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for processing queue type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeQueueProcessing(Builder $query): Builder
     {
@@ -206,6 +239,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for specific channel.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
@@ -214,6 +250,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for messages with positive feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopePositiveFeedback(Builder $query): Builder
     {
@@ -222,6 +261,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for messages with negative feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeNegativeFeedback(Builder $query): Builder
     {
@@ -230,6 +272,9 @@ class ConversationMessage extends Model
 
     /**
      * Scope for messages with any feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeWithFeedback(Builder $query): Builder
     {

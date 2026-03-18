@@ -50,6 +50,8 @@ class Team extends Model
 
     /**
      * Get the leader agent of this team.
+     *
+     * @return BelongsTo<Agent, $this>
      */
     public function leader(): BelongsTo
     {
@@ -60,6 +62,8 @@ class Team extends Model
      * Get all agents that belong to this team via pivot table (many-to-many).
      *
      * Note: The pivot table uses agent_id/team_id strings (not model primary keys).
+     *
+     * @return BelongsToMany<Agent, $this>
      */
     public function agents(): BelongsToMany
     {
@@ -75,6 +79,8 @@ class Team extends Model
 
     /**
      * Get all conversations for this team.
+     *
+     * @return HasMany<Conversation, $this>
      */
     public function conversations(): HasMany
     {
@@ -229,6 +235,9 @@ class Team extends Model
 
     /**
      * Scope for active teams.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeActive(Builder $query): Builder
     {

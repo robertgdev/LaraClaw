@@ -50,6 +50,8 @@ class MemoryLargeFile extends Model
 
     /**
      * The conversation this large file belongs to.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
     public function conversation(): BelongsTo
     {

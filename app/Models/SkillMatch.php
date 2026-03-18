@@ -78,6 +78,8 @@ class SkillMatch extends Model
 
     /**
      * Get the skill this match belongs to.
+     *
+     * @return BelongsTo<Skill, $this>
      */
     public function skill(): BelongsTo
     {
@@ -86,6 +88,8 @@ class SkillMatch extends Model
 
     /**
      * Get the suggested agent for this cache entry.
+     *
+     * @return BelongsTo<Agent, $this>
      */
     public function suggestedAgent(): BelongsTo
     {
@@ -96,61 +100,134 @@ class SkillMatch extends Model
     // Query Scopes
     // ==========================================
 
+    /**
+     * Scope by intent signature.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeBySignature(Builder $query, string $signature): Builder
     {
         return $query->where('intent_signature', $signature);
     }
 
+    /**
+     * Scope for a specific skill.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForSkill(Builder $query, int $skillId): Builder
     {
         return $query->where('skill_id', $skillId);
     }
 
+    /**
+     * Scope for a specific skill name.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForSkillName(Builder $query, string $skillName): Builder
     {
         return $query->whereHas('skill', fn ($q) => $q->where('name', $skillName));
     }
 
+    /**
+     * Scope for a specific category.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForCategory(Builder $query, string $category): Builder
     {
         return $query->where('intent_category', $category);
     }
 
+    /**
+     * Scope for minimum confidence.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeMinConfidence(Builder $query, float $minConfidence): Builder
     {
         return $query->where('confidence_score', '>=', $minConfidence);
     }
 
+    /**
+     * Scope for high confidence matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeHighConfidence(Builder $query): Builder
     {
         return $query->where('confidence_score', '>=', 0.8);
     }
 
+    /**
+     * Scope for medium confidence matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeMediumConfidence(Builder $query): Builder
     {
         return $query->where('confidence_score', '>=', 0.5);
     }
 
+    /**
+     * Scope for popular matches by hit count.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopePopular(Builder $query): Builder
     {
         return $query->orderByDesc('hit_count');
     }
 
+    /**
+     * Scope ordered by confidence.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeByConfidence(Builder $query, string $direction = 'desc'): Builder
     {
         return $query->orderBy('confidence_score', $direction);
     }
 
+    /**
+     * Scope for a specific agent.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForAgent(Builder $query, string $agentId): Builder
     {
         return $query->where('suggested_agent', $agentId);
     }
 
+    /**
+     * Scope containing a specific keyword.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeWithKeyword(Builder $query, string $keyword): Builder
     {
         return $query->whereJsonContains('intent_keywords', $keyword);
     }
 
+    /**
+     * Scope containing any of the given keywords.
+     *
+     * @param  Builder<self>  $query
+     * @param  array<int, string>  $keywords
+     * @return Builder<self>
+     */
     public function scopeWithAnyKeyword(Builder $query, array $keywords): Builder
     {
         return $query->where(function ($q) use ($keywords) {
@@ -160,11 +237,23 @@ class SkillMatch extends Model
         });
     }
 
+    /**
+     * Scope for recent matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
+    /**
+     * Scope for frequent matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeFrequent(Builder $query, int $minHits = 5): Builder
     {
         return $query->where('hit_count', '>=', $minHits);

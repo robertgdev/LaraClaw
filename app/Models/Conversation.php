@@ -74,6 +74,8 @@ class Conversation extends Model
 
     /**
      * Get the team this conversation belongs to.
+     *
+     * @return BelongsTo<Team, $this>
      */
     public function team(): BelongsTo
     {
@@ -112,6 +114,8 @@ class Conversation extends Model
 
     /**
      * Get incoming messages for this conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function incomingMessages(): HasMany
     {
@@ -120,6 +124,8 @@ class Conversation extends Model
 
     /**
      * Get outgoing messages for this conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function outgoingMessages(): HasMany
     {
@@ -142,36 +148,64 @@ class Conversation extends Model
     // Scopes
     // ==========================================
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForTeam(Builder $query, ?string $teamId): Builder
     {
         return $query->where('team_id', $teamId);
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeCompleted(Builder $query): Builder
     {
         return $query->whereNotNull('completed_at');
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopePinned(Builder $query): Builder
     {
         return $query->where('is_pinned', true);
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForSender(Builder $query, string $senderId, ChannelEnum $channel): Builder
     {
         return $query->where('sender_id', $senderId)->where('channel', $channel);
@@ -179,6 +213,9 @@ class Conversation extends Model
 
     /**
      * Scope for conversations with positive feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopePositiveFeedback(Builder $query): Builder
     {
@@ -187,6 +224,9 @@ class Conversation extends Model
 
     /**
      * Scope for conversations with negative feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeNegativeFeedback(Builder $query): Builder
     {
@@ -195,6 +235,9 @@ class Conversation extends Model
 
     /**
      * Scope for conversations with any feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeWithFeedback(Builder $query): Builder
     {

@@ -18,8 +18,6 @@ parameters:
 
     ignoreErrors:
         # Ignore missing generic types for Eloquent relationships since TDeclaringModel is not covariant
-        - '#Method .+::(agent|agents|conversation|conversations|fromAgent|incomingMessages|leader|ledTeams|matches|messages|outgoingMessages|replyTo|sentMessages|skill|suggestedAgent|team|teams|teamsViaJson)\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\(HasOne|HasMany|HasOneThrough|BelongsTo|BelongsToMany|MorphTo) does not specify its types#'
-        - '#Method .+::(scope.*)\(\)#'
 
     treatPhpDocTypesAsCertain: false
 

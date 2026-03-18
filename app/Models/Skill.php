@@ -122,6 +122,8 @@ class Skill extends Model
 
     /**
      * Get all skill matches (intent mappings) for this skill.
+     *
+     * @return HasMany<SkillMatch, $this>
      */
     public function matches(): HasMany
     {
@@ -130,6 +132,8 @@ class Skill extends Model
 
     /**
      * Get the agents that have this skill assigned.
+     *
+     * @return BelongsToMany<Agent, $this>
      */
     public function agents(): BelongsToMany
     {
@@ -143,6 +147,9 @@ class Skill extends Model
 
     /**
      * Scope: Active skills only.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeActive(Builder $query): Builder
     {
@@ -151,6 +158,9 @@ class Skill extends Model
 
     /**
      * Scope: Inactive skills only.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeInactive(Builder $query): Builder
     {
@@ -159,6 +169,9 @@ class Skill extends Model
 
     /**
      * Scope: Skills with a specific classification status.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeWithStatus(Builder $query, string $status): Builder
     {
@@ -167,6 +180,9 @@ class Skill extends Model
 
     /**
      * Scope: Pending classification.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopePending(Builder $query): Builder
     {
@@ -175,6 +191,9 @@ class Skill extends Model
 
     /**
      * Scope: Successfully classified.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeClassified(Builder $query): Builder
     {
@@ -183,6 +202,9 @@ class Skill extends Model
 
     /**
      * Scope: Failed classification.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeFailed(Builder $query): Builder
     {
@@ -191,6 +213,9 @@ class Skill extends Model
 
     /**
      * Scope: Skills needing classification (pending or failed).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeNeedsClassification(Builder $query): Builder
     {
@@ -199,6 +224,9 @@ class Skill extends Model
 
     /**
      * Scope: Skills with a specific checksum.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
     public function scopeWithChecksum(Builder $query, string $checksum): Builder
     {

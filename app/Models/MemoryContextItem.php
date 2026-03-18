@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Helpers\TokenEstimatorHelper;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -55,6 +56,8 @@ class MemoryContextItem extends Model
 
     /**
      * The conversation this context item belongs to.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
     public function conversation(): BelongsTo
     {
@@ -87,48 +90,66 @@ class MemoryContextItem extends Model
 
     /**
      * Scope for items in a conversation.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeForConversation($query, int $conversationId)
+    public function scopeForConversation(Builder $query, int $conversationId): Builder
     {
         return $query->where('conversation_id', $conversationId);
     }
 
     /**
      * Scope for message items.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeMessages($query)
+    public function scopeMessages(Builder $query): Builder
     {
         return $query->where('item_type', 'message');
     }
 
     /**
      * Scope for summary items.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeSummaries($query)
+    public function scopeSummaries(Builder $query): Builder
     {
         return $query->where('item_type', 'summary');
     }
 
     /**
      * Scope ordered by ordinal.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeOrdered($query)
+    public function scopeOrdered(Builder $query): Builder
     {
         return $query->orderBy('ordinal');
     }
 
     /**
      * Scope for items before a given ordinal.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeBeforeOrdinal($query, int $ordinal)
+    public function scopeBeforeOrdinal(Builder $query, int $ordinal): Builder
     {
         return $query->where('ordinal', '<', $ordinal);
     }
 
     /**
      * Scope for items at or after a given ordinal.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeFromOrdinal($query, int $ordinal)
+    public function scopeFromOrdinal(Builder $query, int $ordinal): Builder
     {
         return $query->where('ordinal', '>=', $ordinal);
     }
