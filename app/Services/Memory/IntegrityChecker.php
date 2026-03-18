@@ -5,10 +5,10 @@ namespace App\Services\Memory;
 use App\DTOs\IntegrityCheckDTO;
 use App\DTOs\IntegrityReportDTO;
 use App\Helpers\TokenEstimatorHelper;
-use App\Models\ContextItem;
+use App\Models\MemoryContextItem;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
-use App\Models\Summary;
+use App\Models\MemorySummary;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -89,7 +89,7 @@ class IntegrityChecker
      */
     private function checkContextItemsContiguous(int $conversationId): IntegrityCheckDTO
     {
-        $items = ContextItem::forConversation($conversationId)
+        $items = MemoryContextItem::forConversation($conversationId)
             ->ordered()
             ->get();
 
@@ -126,7 +126,7 @@ class IntegrityChecker
      */
     private function checkContextItemsValidRefs(int $conversationId): IntegrityCheckDTO
     {
-        $items = ContextItem::forConversation($conversationId)
+        $items = MemoryContextItem::forConversation($conversationId)
             ->ordered()
             ->get();
 
@@ -143,7 +143,7 @@ class IntegrityChecker
                     ];
                 }
             } elseif ($item->item_type === 'summary' && $item->summary_id !== null) {
-                $summary = Summary::find($item->summary_id);
+                $summary = MemorySummary::find($item->summary_id);
                 if (! $summary) {
                     $danglingRefs[] = [
                         'ordinal' => $item->ordinal,
@@ -173,7 +173,7 @@ class IntegrityChecker
      */
     private function checkSummariesHaveLineage(int $conversationId): IntegrityCheckDTO
     {
-        $summaries = Summary::forConversation($conversationId)->get();
+        $summaries = MemorySummary::forConversation($conversationId)->get();
         $missingLineage = [];
 
         foreach ($summaries as $summary) {
@@ -219,8 +219,8 @@ class IntegrityChecker
      */
     private function checkNoOrphanSummaries(int $conversationId): IntegrityCheckDTO
     {
-        $summaries = Summary::forConversation($conversationId)->get();
-        $contextItems = ContextItem::forConversation($conversationId)->get();
+        $summaries = MemorySummary::forConversation($conversationId)->get();
+        $contextItems = MemoryContextItem::forConversation($conversationId)->get();
 
         // Build set of summary IDs in context_items
         $contextSummaryIds = $contextItems
@@ -265,7 +265,7 @@ class IntegrityChecker
      */
     private function checkContextTokenConsistency(int $conversationId): IntegrityCheckDTO
     {
-        $contextItems = ContextItem::forConversation($conversationId)
+        $contextItems = MemoryContextItem::forConversation($conversationId)
             ->ordered()
             ->get();
 
@@ -278,7 +278,7 @@ class IntegrityChecker
                     $manualSum += $this->estimateTokens($message->message ?? '');
                 }
             } elseif ($item->item_type === 'summary' && $item->summary_id !== null) {
-                $summary = Summary::find($item->summary_id);
+                $summary = MemorySummary::find($item->summary_id);
                 if ($summary) {
                     $manualSum += $summary->token_count;
                 }
@@ -355,7 +355,7 @@ class IntegrityChecker
      */
     private function checkNoDuplicateContextRefs(int $conversationId): IntegrityCheckDTO
     {
-        $items = ContextItem::forConversation($conversationId)
+        $items = MemoryContextItem::forConversation($conversationId)
             ->ordered()
             ->get();
 

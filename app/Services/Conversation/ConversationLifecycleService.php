@@ -99,6 +99,13 @@ class ConversationLifecycleService
         ?string $provider = null,
         ?string $model = null
     ): void {
+        // DEBUG: Log when recordExchange is called
+        \App\Logging\MultiLogger::info('[DEBUG] ConversationLifecycleService::recordExchange() called', [
+            'conversation_id' => $conversation->conversation_id,
+            'id' => $conversation->id,
+            'agent_id' => $agentId,
+        ]);
+
         // Add user message
         $userMsg = $conversation->addUserMessage(
             $userMessage,
@@ -119,6 +126,9 @@ class ConversationLifecycleService
         // Update conversation metadata
         $conversation->updateDerivedTitle();
         $conversation->touchLastMessage();
+
+        // Mark conversation as completed (single-turn conversations)
+        $conversation->markCompleted();
 
         // Append to lossless context if memory service is available
         $this->appendToLosslessContext($conversation->id, $userMsg->id, $agentMsg->id);

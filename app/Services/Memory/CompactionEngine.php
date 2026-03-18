@@ -6,7 +6,7 @@ use App\DTOs\CompactionDecisionDTO;
 use App\DTOs\CompactionResultDTO;
 use App\Helpers\TokenEstimatorHelper;
 use App\Models\ConversationMessage;
-use App\Models\Summary;
+use App\Models\MemorySummary;
 use Carbon\CarbonInterface;
 
 /**
@@ -356,7 +356,7 @@ class CompactionEngine
         );
 
         // Create summary record
-        $summaryId = Summary::generateId($summaryResult['content']);
+        $summaryId = MemorySummary::generateId($summaryResult['content']);
         $tokenCount = $this->estimateTokens($summaryResult['content']);
 
         $this->summaryStore->insertSummary([
@@ -438,7 +438,7 @@ class CompactionEngine
         );
 
         // Create summary record
-        $summaryId = Summary::generateId($summaryResult['content']);
+        $summaryId = MemorySummary::generateId($summaryResult['content']);
         $tokenCount = $this->estimateTokens($summaryResult['content']);
 
         $this->summaryStore->insertSummary([

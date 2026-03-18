@@ -10,15 +10,16 @@ return new class extends Migration
      * Run the migrations.
      *
      * Creates the lossless memory compaction tables:
-     * - summaries: Hierarchical summaries (leaf and condensed)
-     * - context_items: Ordered list of messages and summaries forming conversation context
-     * - summary_messages: Junction table linking leaf summaries to source messages
-     * - summary_parents: Junction table linking condensed summaries to parent summaries
+     * - memory_summaries: Hierarchical summaries (leaf and condensed)
+     * - memory_context_items: Ordered list of messages and summaries forming conversation context
+     * - memory_summary_messages: Junction table linking leaf summaries to source messages
+     * - memory_summary_parents: Junction table linking condensed summaries to parent summaries
+     * - memory_large_files: Metadata for large file attachments
      */
     public function up(): void
     {
-        // Summaries table - stores hierarchical summaries
-        Schema::create('summaries', function (Blueprint $table) {
+        // Memory summaries table - stores hierarchical summaries
+        Schema::create('memory_summaries', function (Blueprint $table) {
             $table->string('summary_id', 64)->primary();
             $table->foreignId('conversation_id')->constrained('conversations', 'id')->onDelete('cascade');
             $table->enum('kind', ['leaf', 'condensed']);
@@ -37,8 +38,8 @@ return new class extends Migration
             $table->index(['conversation_id', 'depth']);
         });
 
-        // Context items table - ordered list of messages and summaries
-        Schema::create('context_items', function (Blueprint $table) {
+        // Memory context items table - ordered list of messages and summaries
+        Schema::create('memory_context_items', function (Blueprint $table) {
             $table->foreignId('conversation_id')->constrained()->onDelete('cascade');
             $table->unsignedInteger('ordinal');
             $table->enum('item_type', ['message', 'summary']);
@@ -53,33 +54,33 @@ return new class extends Migration
         });
 
         // Add foreign key for summary_id separately to avoid constraint issues
-        Schema::table('context_items', function (Blueprint $table) {
-            $table->foreign('summary_id')->references('summary_id')->on('summaries')->onDelete('restrict');
+        Schema::table('memory_context_items', function (Blueprint $table) {
+            $table->foreign('summary_id')->references('summary_id')->on('memory_summaries')->onDelete('restrict');
         });
 
-        // Summary messages junction table - links leaf summaries to source messages
-        Schema::create('summary_messages', function (Blueprint $table) {
+        // Memory summary messages junction table - links leaf summaries to source messages
+        Schema::create('memory_summary_messages', function (Blueprint $table) {
             $table->string('summary_id', 64);
             $table->foreignId('message_id')->constrained('conversation_messages', 'id')->onDelete('restrict');
             $table->unsignedInteger('ordinal');
             $table->primary(['summary_id', 'message_id']);
 
-            $table->foreign('summary_id')->references('summary_id')->on('summaries')->onDelete('cascade');
+            $table->foreign('summary_id')->references('summary_id')->on('memory_summaries')->onDelete('cascade');
         });
 
-        // Summary parents junction table - links condensed summaries to parent summaries
-        Schema::create('summary_parents', function (Blueprint $table) {
+        // Memory summary parents junction table - links condensed summaries to parent summaries
+        Schema::create('memory_summary_parents', function (Blueprint $table) {
             $table->string('summary_id', 64);
             $table->string('parent_summary_id', 64);
             $table->unsignedInteger('ordinal');
             $table->primary(['summary_id', 'parent_summary_id']);
 
-            $table->foreign('summary_id')->references('summary_id')->on('summaries')->onDelete('cascade');
-            $table->foreign('parent_summary_id')->references('summary_id')->on('summaries')->onDelete('restrict');
+            $table->foreign('summary_id')->references('summary_id')->on('memory_summaries')->onDelete('cascade');
+            $table->foreign('parent_summary_id')->references('summary_id')->on('memory_summaries')->onDelete('restrict');
         });
 
-        // Large files table - stores metadata for large file attachments
-        Schema::create('large_files', function (Blueprint $table) {
+        // Memory large files table - stores metadata for large file attachments
+        Schema::create('memory_large_files', function (Blueprint $table) {
             $table->string('file_id', 64)->primary();
             $table->foreignId('conversation_id')->constrained()->onDelete('cascade');
             $table->string('file_name')->nullable();

@@ -87,6 +87,15 @@ class AgentInvocationStage implements MessagePipelineStage
         // Session management
         $context->session = $this->getOrCreateSession($context);
 
+        // DEBUG: Log session creation
+        /*
+        \App\Logging\MultiLogger::info('[DEBUG] AgentInvocationStage: session set', [
+            'session_id' => $context->session?->id,
+            'session_conversation_id' => $context->session?->conversation_id,
+            'message_conversation_id' => $context->message->conversation_id,
+        ]);
+        */
+
         // Update session metadata
         $firstMessage = $context->session->getFirstUserMessage();
         $updateData = ['last_message_at' => now()];

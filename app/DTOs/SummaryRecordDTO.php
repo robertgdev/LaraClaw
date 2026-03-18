@@ -30,7 +30,7 @@ readonly class SummaryRecordDTO
     /**
      * Create from model.
      */
-    public static function fromModel(\App\Models\Summary $summary): self
+    public static function fromModel(\App\Models\MemorySummary $summary): self
     {
         return new self(
             summaryId: $summary->summary_id,

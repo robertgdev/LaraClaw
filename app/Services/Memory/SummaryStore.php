@@ -5,9 +5,9 @@ namespace App\Services\Memory;
 use App\DTOs\ContextItemDTO;
 use App\DTOs\SummaryRecordDTO;
 use App\Helpers\TokenEstimatorHelper;
-use App\Models\ContextItem;
+use App\Models\MemoryContextItem;
 use App\Models\ConversationMessage;
-use App\Models\Summary;
+use App\Models\MemorySummary;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +27,7 @@ class SummaryStore
      */
     public function insertSummary(array $input): SummaryRecordDTO
     {
-        $summary = Summary::create([
+        $summary = MemorySummary::create([
             'summary_id' => $input['summary_id'],
             'conversation_id' => $input['conversation_id'],
             'kind' => $input['kind'],
@@ -50,7 +50,7 @@ class SummaryStore
      */
     public function getSummary(string $summaryId): ?SummaryRecordDTO
     {
-        $summary = Summary::find($summaryId);
+        $summary = MemorySummary::find($summaryId);
 
         return $summary ? SummaryRecordDTO::fromModel($summary) : null;
     }
@@ -62,7 +62,7 @@ class SummaryStore
      */
     public function getSummariesByConversation(int $conversationId): array
     {
-        $summaries = Summary::forConversation($conversationId)
+        $summaries = MemorySummary::forConversation($conversationId)
             ->orderBy('created_at')
             ->get();
 
@@ -76,7 +76,7 @@ class SummaryStore
      */
     public function getContextItems(int $conversationId): array
     {
-        $items = ContextItem::forConversation($conversationId)
+        $items = MemoryContextItem::forConversation($conversationId)
             ->ordered()
             ->get();
 
@@ -90,18 +90,18 @@ class SummaryStore
      */
     public function getDistinctDepthsInContext(int $conversationId, ?int $maxOrdinalExclusive = null): array
     {
-        $query = DB::table('context_items')
-            ->join('summaries', 'summaries.summary_id', '=', 'context_items.summary_id')
-            ->where('context_items.conversation_id', $conversationId)
-            ->where('context_items.item_type', 'summary')
+        $query = DB::table('memory_context_items')
+            ->join('memory_summaries', 'memory_summaries.summary_id', '=', 'memory_context_items.summary_id')
+            ->where('memory_context_items.conversation_id', $conversationId)
+            ->where('memory_context_items.item_type', 'summary')
             ->distinct()
-            ->orderBy('summaries.depth');
+            ->orderBy('memory_summaries.depth');
 
         if ($maxOrdinalExclusive !== null && $maxOrdinalExclusive !== PHP_INT_MAX) {
-            $query->where('context_items.ordinal', '<', $maxOrdinalExclusive);
+            $query->where('memory_context_items.ordinal', '<', $maxOrdinalExclusive);
         }
 
-        return $query->pluck('summaries.depth')->toArray();
+        return $query->pluck('memory_summaries.depth')->toArray();
     }
 
     /**
@@ -110,7 +110,7 @@ class SummaryStore
     public function getContextTokenCount(int $conversationId): int
     {
         // Get message tokens by estimating from content
-        $messageIds = DB::table('context_items')
+        $messageIds = DB::table('memory_context_items')
             ->where('conversation_id', $conversationId)
             ->where('item_type', 'message')
             ->pluck('message_id');
@@ -124,11 +124,11 @@ class SummaryStore
         }
 
         // Get summary tokens from stored token_count
-        $summaryTokens = DB::table('context_items')
-            ->join('summaries', 'summaries.summary_id', '=', 'context_items.summary_id')
-            ->where('context_items.conversation_id', $conversationId)
-            ->where('context_items.item_type', 'summary')
-            ->sum('summaries.token_count');
+        $summaryTokens = DB::table('memory_context_items')
+            ->join('memory_summaries', 'memory_summaries.summary_id', '=', 'memory_context_items.summary_id')
+            ->where('memory_context_items.conversation_id', $conversationId)
+            ->where('memory_context_items.item_type', 'summary')
+            ->sum('memory_summaries.token_count');
 
         return (int) ($messageTokens + $summaryTokens);
     }
@@ -146,10 +146,10 @@ class SummaryStore
      */
     public function appendContextMessage(int $conversationId, int $messageId): void
     {
-        $maxOrdinal = ContextItem::forConversation($conversationId)
+        $maxOrdinal = MemoryContextItem::forConversation($conversationId)
             ->max('ordinal') ?? -1;
 
-        ContextItem::create([
+        MemoryContextItem::create([
             'conversation_id' => $conversationId,
             'ordinal' => $maxOrdinal + 1,
             'item_type' => 'message',
@@ -170,11 +170,11 @@ class SummaryStore
             return;
         }
 
-        $maxOrdinal = ContextItem::forConversation($conversationId)
+        $maxOrdinal = MemoryContextItem::forConversation($conversationId)
             ->max('ordinal') ?? -1;
 
         foreach ($messageIds as $index => $messageId) {
-            ContextItem::create([
+            MemoryContextItem::create([
                 'conversation_id' => $conversationId,
                 'ordinal' => $maxOrdinal + $index + 1,
                 'item_type' => 'message',
@@ -190,10 +190,10 @@ class SummaryStore
      */
     public function appendContextSummary(int $conversationId, string $summaryId): void
     {
-        $maxOrdinal = ContextItem::forConversation($conversationId)
+        $maxOrdinal = MemoryContextItem::forConversation($conversationId)
             ->max('ordinal') ?? -1;
 
-        ContextItem::create([
+        MemoryContextItem::create([
             'conversation_id' => $conversationId,
             'ordinal' => $maxOrdinal + 1,
             'item_type' => 'summary',
@@ -214,12 +214,12 @@ class SummaryStore
     ): void {
         DB::transaction(function () use ($conversationId, $startOrdinal, $endOrdinal, $summaryId) {
             // Delete items in range
-            ContextItem::forConversation($conversationId)
+            MemoryContextItem::forConversation($conversationId)
                 ->whereBetween('ordinal', [$startOrdinal, $endOrdinal])
                 ->delete();
 
             // Insert summary at start ordinal
-            ContextItem::create([
+            MemoryContextItem::create([
                 'conversation_id' => $conversationId,
                 'ordinal' => $startOrdinal,
                 'item_type' => 'summary',
@@ -238,7 +238,7 @@ class SummaryStore
      */
     private function resequenceOrdinals(int $conversationId): void
     {
-        $items = ContextItem::forConversation($conversationId)
+        $items = MemoryContextItem::forConversation($conversationId)
             ->ordered()
             ->get();
 
@@ -266,7 +266,7 @@ class SummaryStore
         // First, set all ordinals to large values to free up the constraint
         $offset = 1000000;
         foreach ($updates as $update) {
-            DB::table('context_items')
+            DB::table('memory_context_items')
                 ->where('conversation_id', $update['conversation_id'])
                 ->where('ordinal', $update['old_ordinal'])
                 ->update(['ordinal' => $offset + $update['old_ordinal']]);
@@ -274,7 +274,7 @@ class SummaryStore
 
         // Now set the correct ordinals
         foreach ($updates as $update) {
-            DB::table('context_items')
+            DB::table('memory_context_items')
                 ->where('conversation_id', $update['conversation_id'])
                 ->where('ordinal', $offset + $update['old_ordinal'])
                 ->update(['ordinal' => $update['new_ordinal']]);
@@ -294,7 +294,7 @@ class SummaryStore
         }
 
         foreach ($messageIds as $index => $messageId) {
-            DB::table('summary_messages')->updateOrInsert(
+            DB::table('memory_summary_messages')->updateOrInsert(
                 ['summary_id' => $summaryId, 'message_id' => $messageId],
                 ['ordinal' => $index]
             );
@@ -314,7 +314,7 @@ class SummaryStore
         }
 
         foreach ($parentSummaryIds as $index => $parentId) {
-            DB::table('summary_parents')->updateOrInsert(
+            DB::table('memory_summary_parents')->updateOrInsert(
                 ['summary_id' => $summaryId, 'parent_summary_id' => $parentId],
                 ['ordinal' => $index]
             );
@@ -328,7 +328,7 @@ class SummaryStore
      */
     public function getSummaryMessages(string $summaryId): array
     {
-        return DB::table('summary_messages')
+        return DB::table('memory_summary_messages')
             ->where('summary_id', $summaryId)
             ->orderBy('ordinal')
             ->pluck('message_id')
@@ -343,14 +343,14 @@ class SummaryStore
     public function getSummaryParents(string $summaryId): array
     {
         // Get parent summary IDs from the pivot table with ordering
-        $parentIds = DB::table('summary_parents')
+        $parentIds = DB::table('memory_summary_parents')
             ->where('summary_id', $summaryId)
             ->orderBy('ordinal')
             ->pluck('parent_summary_id');
 
         $parents = [];
         foreach ($parentIds as $parentId) {
-            $summary = Summary::find($parentId);
+            $summary = MemorySummary::find($parentId);
             if ($summary) {
                 $parents[] = SummaryRecordDTO::fromModel($summary);
             }
@@ -367,14 +367,14 @@ class SummaryStore
     public function getSummaryChildren(string $parentSummaryId): array
     {
         // Get child summary IDs from the pivot table with ordering
-        $childIds = DB::table('summary_parents')
+        $childIds = DB::table('memory_summary_parents')
             ->where('parent_summary_id', $parentSummaryId)
             ->orderBy('ordinal')
             ->pluck('summary_id');
 
         $children = [];
         foreach ($childIds as $childId) {
-            $summary = Summary::find($childId);
+            $summary = MemorySummary::find($childId);
             if ($summary) {
                 $children[] = SummaryRecordDTO::fromModel($summary);
             }
@@ -388,7 +388,7 @@ class SummaryStore
      */
     public function getMaxOrdinal(int $conversationId): int
     {
-        return ContextItem::forConversation($conversationId)
+        return MemoryContextItem::forConversation($conversationId)
             ->max('ordinal') ?? -1;
     }
 }

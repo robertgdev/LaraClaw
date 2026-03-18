@@ -23,7 +23,7 @@ readonly class ContextItemDTO
     /**
      * Create from model.
      */
-    public static function fromModel(\App\Models\ContextItem $item): self
+    public static function fromModel(\App\Models\MemoryContextItem $item): self
     {
         return new self(
             conversationId: $item->conversation_id,

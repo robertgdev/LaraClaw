@@ -93,7 +93,7 @@ class Conversation extends Model
      */
     public function contextItems(): HasMany
     {
-        return $this->hasMany(ContextItem::class, 'conversation_id', 'id');
+        return $this->hasMany(MemoryContextItem::class, 'conversation_id', 'id');
     }
 
     /**
@@ -101,7 +101,7 @@ class Conversation extends Model
      */
     public function summaries(): HasMany
     {
-        return $this->hasMany(Summary::class, 'conversation_id', 'id');
+        return $this->hasMany(MemorySummary::class, 'conversation_id', 'id');
     }
 
     /**
@@ -345,7 +345,27 @@ class Conversation extends Model
      */
     public function markCompleted(): void
     {
+        // DEBUG: Log when markCompleted is called
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+        $caller = $trace[1] ?? null;
+        MultiLogger::info('[DEBUG] Conversation::markCompleted() called', [
+            'conversation_id' => $this->conversation_id,
+            'id' => $this->id,
+            'completed_at_before' => $this->completed_at?->toIso8601String(),
+            'caller_file' => $caller['file'] ?? 'unknown',
+            'caller_line' => $caller['line'] ?? 'unknown',
+            'caller_class' => $caller['class'] ?? 'unknown',
+            'caller_function' => $caller['function'] ?? 'unknown',
+        ]);
+
         $this->update(['completed_at' => now()]);
+
+        // DEBUG: Log after update
+        $this->refresh();
+        MultiLogger::info('[DEBUG] Conversation::markCompleted() completed', [
+            'conversation_id' => $this->conversation_id,
+            'completed_at_after' => $this->completed_at?->toIso8601String(),
+        ]);
     }
 
     /**
