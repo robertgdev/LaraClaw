@@ -2,8 +2,8 @@
 
 use App\Enums\ChannelEnum;
 use App\Models\Agent;
-use App\Models\ContextItem;
 use App\Models\Conversation;
+use App\Models\MemoryContextItem;
 use App\Models\Team;
 use App\Services\ConversationHistoryService;
 use App\Services\MemoryEngineService;
@@ -151,7 +151,7 @@ describe('ConversationHistoryService', function () {
             expect($conversation)->not->toBeNull();
 
             // Verify context items were created (user message + agent response = 2)
-            $contextItems = ContextItem::forConversation($conversation->id)->ordered()->get();
+            $contextItems = MemoryContextItem::forConversation($conversation->id)->ordered()->get();
             expect($contextItems)->toHaveCount(2)
                 ->and($contextItems[0]->item_type)->toBe('message')
                 ->and($contextItems[0]->ordinal)->toBe(0)
@@ -186,7 +186,7 @@ describe('ConversationHistoryService', function () {
             expect($conversation)->not->toBeNull();
 
             // Verify no context items were created
-            $contextItems = ContextItem::forConversation($conversation->id)->get();
+            $contextItems = MemoryContextItem::forConversation($conversation->id)->get();
             expect($contextItems)->toHaveCount(0);
         });
     });

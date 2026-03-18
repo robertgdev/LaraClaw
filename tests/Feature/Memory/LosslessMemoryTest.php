@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Memory;
 
-use App\Models\ContextItem;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
-use App\Models\Summary;
+use App\Models\MemoryContextItem;
+use App\Models\MemorySummary;
 use App\Services\Memory\CompactionEngine;
 use App\Services\Memory\IntegrityChecker;
 use App\Services\Memory\SummaryStore;
@@ -65,7 +65,7 @@ class LosslessMemoryTest extends TestCase
     {
         $conversation = $this->createConversation();
 
-        $summary = Summary::create([
+        $summary = MemorySummary::create([
             'summary_id' => 'sum_test123',
             'conversation_id' => $conversation->id,
             'kind' => 'leaf',

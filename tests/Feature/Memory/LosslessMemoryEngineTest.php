@@ -3,10 +3,9 @@
 namespace Tests\Feature\Memory;
 
 use App\Enums\FeedbackEnum;
-use App\Models\ContextItem;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
-use App\Models\Summary;
+use App\Models\MemorySummary;
 use App\Services\Memory\CompactionEngine;
 use App\Services\Memory\IntegrityChecker;
 use App\Services\Memory\SummaryStore;
@@ -289,7 +288,7 @@ class LosslessMemoryEngineTest extends TestCase
         $conversation = $this->createConversation();
 
         // Create an orphaned summary (not linked to context)
-        Summary::create([
+        MemorySummary::create([
             'summary_id' => 'sum_orphan_test',
             'conversation_id' => $conversation->id,
             'kind' => 'leaf',
@@ -352,7 +351,7 @@ class LosslessMemoryEngineTest extends TestCase
         $conversation = $this->createConversation();
 
         // Create an orphaned summary to trigger a warning
-        Summary::create([
+        MemorySummary::create([
             'summary_id' => 'sum_repair_test',
             'conversation_id' => $conversation->id,
             'kind' => 'leaf',
