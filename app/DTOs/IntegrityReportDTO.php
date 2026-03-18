@@ -100,6 +100,8 @@ readonly class IntegrityReportDTO
 
     /**
      * Convert to array.
+     *
+     * @return array<string, int|string|bool|array<int, array<string, mixed>>>
      */
     public function toArray(): array
     {

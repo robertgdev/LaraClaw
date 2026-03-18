@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $descendant_count Number of descendant summaries
  * @property int $descendant_token_count Total tokens in descendants
  * @property int $source_message_token_count Original message tokens before compaction
- * @property array $file_ids File IDs referenced in this summary
+ * @property array<int, string> $file_ids File IDs referenced in this summary
  */
 class MemorySummary extends Model
 {
@@ -78,6 +78,8 @@ class MemorySummary extends Model
     /**
      * Messages that this leaf summary summarizes.
      * Only applies to leaf summaries (depth 0).
+     *
+     * @return BelongsToMany<ConversationMessage, $this>
      */
     public function sourceMessages(): BelongsToMany
     {
@@ -92,6 +94,8 @@ class MemorySummary extends Model
     /**
      * Parent summaries that this condensed summary summarizes.
      * Only applies to condensed summaries (depth 1+).
+     *
+     * @return BelongsToMany<MemorySummary, $this>
      */
     public function parentSummaries(): BelongsToMany
     {
@@ -106,6 +110,8 @@ class MemorySummary extends Model
     /**
      * Child summaries that were created from this summary.
      * This summary is a parent of these children.
+     *
+     * @return BelongsToMany<MemorySummary, $this>
      */
     public function childSummaries(): BelongsToMany
     {
@@ -119,6 +125,8 @@ class MemorySummary extends Model
 
     /**
      * Context items that reference this summary.
+     *
+     * @return HasMany<MemoryContextItem, $this>
      */
     public function contextItems(): HasMany
     {

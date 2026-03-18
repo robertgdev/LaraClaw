@@ -191,7 +191,7 @@ class AgentInvocationStage implements MessagePipelineStage
             return;
         }
 
-        if (! $context->session || ! $context->message) {
+        if (! $context->session) {
             return;
         }
 

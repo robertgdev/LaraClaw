@@ -182,7 +182,7 @@ class ScriptPathResolver
         if ($skills->isEmpty()) {
             MultiLogger::info('Skill index empty, refreshing...');
             $parsedSkills = $this->skillSearch->refreshIndex();
-            $skillDTOs = array_map(fn ($parsed) => $parsed->toSkillDTO(), array_values($parsedSkills));
+            $skillDTOs = $parsedSkills->map(fn ($parsed) => $parsed->toSkillDTO())->all();
             $skills = new SkillDTOCollection($skillDTOs);
         }
 

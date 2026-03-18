@@ -82,6 +82,8 @@ class Conversation extends Model
 
     /**
      * Get all messages for this conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function messages(): HasMany
     {
@@ -90,6 +92,8 @@ class Conversation extends Model
 
     /**
      * Get context items for lossless memory.
+     *
+     * @return HasMany<MemoryContextItem, $this>
      */
     public function contextItems(): HasMany
     {
@@ -98,6 +102,8 @@ class Conversation extends Model
 
     /**
      * Get summaries for lossless memory.
+     *
+     * @return HasMany<MemorySummary, $this>
      */
     public function summaries(): HasMany
     {

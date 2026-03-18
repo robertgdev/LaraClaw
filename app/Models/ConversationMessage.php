@@ -23,6 +23,9 @@ use Illuminate\Support\Str;
  * - Messages have a direction: 'incoming' (from user) or 'outgoing' (from agent)
  * - All message content is stored here, not in the conversations table
  * - Supports user feedback (positive, negative, neutral)
+ *
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
  */
 class ConversationMessage extends Model
 {

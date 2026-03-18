@@ -35,11 +35,11 @@ class ChatController extends Controller
                 'title' => $conv->label,
                 'derivedTitle' => $conv->derived_title ?? $this->deriveTitle($conv),
                 'label' => $conv->label,
-                'updatedAt' => $conv->updated_at?->timestamp,
+                'updatedAt' => $conv->updated_at->timestamp,
                 'lastMessage' => $lastMessage ? [
                     'role' => $lastMessage->direction === 'incoming' ? 'user' : 'assistant',
                     'content' => $lastMessage->message,
-                    'timestamp' => $lastMessage->created_at?->timestamp,
+                    'timestamp' => $lastMessage->created_at->timestamp,
                 ] : null,
                 'totalTokens' => null,
                 'contextTokens' => null,
@@ -109,7 +109,7 @@ class ChatController extends Controller
                 'messageId' => $msg->message_id,
                 'role' => $msg->direction === 'incoming' ? 'user' : 'assistant',
                 'content' => [['type' => 'text', 'text' => $msg->message]],
-                'timestamp' => $msg->created_at?->timestamp,
+                'timestamp' => $msg->created_at->timestamp,
                 'feedback' => $msg->feedback?->value,
             ];
         });

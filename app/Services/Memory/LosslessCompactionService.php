@@ -284,6 +284,8 @@ class LosslessCompactionService
 
     /**
      * Evaluate if compaction is needed for a conversation.
+     *
+     * @return array{should_compact: bool, current_tokens: int, threshold: int, token_budget: int}
      */
     public function evaluateCompaction(int $conversationId, ?int $tokenBudget = null): array
     {

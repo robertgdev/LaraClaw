@@ -206,7 +206,7 @@ class LosslessCompactionJob implements ShouldQueue
     /**
      * Determine the time at which the job should timeout.
      */
-    public function retryUntil(): \DateTime
+    public function retryUntil(): \DateTimeInterface
     {
         return now()->addMinutes(30);
     }

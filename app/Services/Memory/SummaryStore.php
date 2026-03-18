@@ -22,7 +22,7 @@ class SummaryStore
     /**
      * Insert a new summary.
      *
-     * @param  array  $input  Summary data
+     * @param  array{summary_id: string, conversation_id: int, kind: string, depth?: int, content: string, token_count: int, earliest_at?: string|null, latest_at?: string|null, descendant_count?: int, descendant_token_count?: int, source_message_token_count?: int, file_ids?: array<int, string>}  $input  Summary data
      * @return SummaryRecordDTO The created summary
      */
     public function insertSummary(array $input): SummaryRecordDTO

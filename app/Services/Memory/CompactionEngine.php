@@ -45,8 +45,12 @@ class CompactionEngine
 
     private SummaryStore $summaryStore;
 
+    /** @var array<string, mixed> */
     private array $config;
 
+    /**
+     * @param  array<string, mixed>|null  $config
+     */
     public function __construct(
         SummaryStore $summaryStore,
         ?array $config = null
@@ -88,6 +92,8 @@ class CompactionEngine
 
     /**
      * Evaluate whether the leaf trigger is active.
+     *
+     * @return array{should_compact: bool, raw_tokens_outside_tail: int, threshold: int}
      */
     public function evaluateLeafTrigger(int $conversationId): array
     {
@@ -267,6 +273,8 @@ class CompactionEngine
 
     /**
      * Compact until under target.
+     *
+     * @return array{success: bool, rounds: int, final_tokens: int}
      */
     public function compactUntilUnder(
         int $conversationId,
@@ -315,6 +323,9 @@ class CompactionEngine
 
     /**
      * Run a leaf pass - summarize messages into a leaf summary.
+     *
+     * @param  array<int, object{messageId: int|null, ordinal: int}>  $messageItems
+     * @return array{summary_id: string, level: string, content: string|null}
      */
     private function leafPass(
         int $conversationId,
@@ -366,8 +377,8 @@ class CompactionEngine
             'depth' => 0,
             'content' => $summaryResult['content'],
             'token_count' => $tokenCount,
-            'earliest_at' => ! empty($messageContents) ? min(array_column($messageContents, 'created_at')) : null,
-            'latest_at' => ! empty($messageContents) ? max(array_column($messageContents, 'created_at')) : null,
+            'earliest_at' => min(array_column($messageContents, 'created_at')),
+            'latest_at' => max(array_column($messageContents, 'created_at')),
             'source_message_token_count' => array_sum(array_column($messageContents, 'token_count')),
         ]);
 
@@ -396,6 +407,9 @@ class CompactionEngine
 
     /**
      * Run a condensed pass - summarize summaries into higher-level summary.
+     *
+     * @param  array<int, object{summaryId: string|null, ordinal: int}>  $summaryItems
+     * @return array{summary_id: string, level: string}
      */
     private function condensedPass(
         int $conversationId,
@@ -448,8 +462,8 @@ class CompactionEngine
             'depth' => $targetDepth + 1,
             'content' => $summaryResult['content'],
             'token_count' => $tokenCount,
-            'earliest_at' => ! empty($summaryRecords) ? min(array_map(fn ($s) => $s->earliestAt ?? $s->createdAt, $summaryRecords)) : null,
-            'latest_at' => ! empty($summaryRecords) ? max(array_map(fn ($s) => $s->latestAt ?? $s->createdAt, $summaryRecords)) : null,
+            'earliest_at' => min(array_map(fn ($s) => $s->earliestAt ?? $s->createdAt, $summaryRecords)),
+            'latest_at' => max(array_map(fn ($s) => $s->latestAt ?? $s->createdAt, $summaryRecords)),
             'descendant_count' => array_sum(array_map(fn ($s) => $s->descendantCount + 1, $summaryRecords)),
             'descendant_token_count' => array_sum(array_map(fn ($s) => $s->descendantTokenCount + $s->tokenCount, $summaryRecords)),
             'source_message_token_count' => array_sum(array_map(fn ($s) => $s->sourceMessageTokenCount, $summaryRecords)),
@@ -479,6 +493,9 @@ class CompactionEngine
 
     /**
      * Summarize with three-level escalation.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array{content: string, level: string}
      */
     private function summarizeWithEscalation(
         string $sourceText,
@@ -517,6 +534,8 @@ class CompactionEngine
 
     /**
      * Generate a fallback summary via truncation.
+     *
+     * @return array{content: string, level: string}
      */
     private function fallbackSummary(string $text, int $inputTokens): array
     {
@@ -536,6 +555,8 @@ class CompactionEngine
      * Messages with positive feedback are preserved longer by applying
      * a threshold reduction, making them less likely to be included
      * in compaction chunks.
+     *
+     * @return array{items: array<int, mixed>, tokens: int}
      */
     private function selectOldestLeafChunk(int $conversationId): array
     {
@@ -560,10 +581,6 @@ class CompactionEngine
                 $started = true;
             } elseif (! $item->isMessage() || $item->messageId === null) {
                 break;
-            }
-
-            if ($item->messageId === null) {
-                continue;
             }
 
             $message = ConversationMessage::find($item->messageId);
@@ -597,6 +614,8 @@ class CompactionEngine
 
     /**
      * Select the shallowest condensation candidate.
+     *
+     * @return array{target_depth: int, items: array<int, mixed>}|null
      */
     private function selectShallowestCondensationCandidate(int $conversationId, bool $hardTrigger): ?array
     {
@@ -628,6 +647,8 @@ class CompactionEngine
 
     /**
      * Select the oldest chunk at a specific depth.
+     *
+     * @return array{items: array<int, mixed>, tokens: int}
      */
     private function selectOldestChunkAtDepth(
         int $conversationId,
@@ -691,6 +712,8 @@ class CompactionEngine
 
     /**
      * Resolve the fresh tail ordinal boundary.
+     *
+     * @param  array<int, object{isMessage: callable, messageId: int|null, ordinal: int}>  $contextItems
      */
     private function resolveFreshTailOrdinal(array $contextItems): int
     {
@@ -716,6 +739,8 @@ class CompactionEngine
 
     /**
      * Resolve prior leaf summary context.
+     *
+     * @param  array<int, object{messageId: int|null, ordinal: int}>  $messageItems
      */
     private function resolvePriorLeafSummaryContext(int $conversationId, array $messageItems): ?string
     {

@@ -63,6 +63,8 @@ class MemoryContextItem extends Model
 
     /**
      * The message this context item references (if message type).
+     *
+     * @return BelongsTo<ConversationMessage, $this>
      */
     public function message(): BelongsTo
     {
@@ -71,6 +73,8 @@ class MemoryContextItem extends Model
 
     /**
      * The summary this context item references (if summary type).
+     *
+     * @return BelongsTo<MemorySummary, $this>
      */
     public function summary(): BelongsTo
     {
@@ -158,7 +162,7 @@ class MemoryContextItem extends Model
             return $this->estimateTokens($this->message->message ?? '');
         }
 
-        if ($this->isSummary() && $this->summary) {
+        if ($this->isSummary() && $this->summary instanceof MemorySummary) {
             return $this->summary->token_count;
         }
 

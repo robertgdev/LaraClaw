@@ -90,6 +90,8 @@ readonly class CompactionResultDTO
 
     /**
      * Convert to array.
+     *
+     * @return array<string, bool|int|float|string|null>
      */
     public function toArray(): array
     {

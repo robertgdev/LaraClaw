@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Helpers;
 
+use function Safe\preg_match_all;
+
 /**
  * Token Estimator Helper.
  *

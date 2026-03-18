@@ -185,6 +185,8 @@ class MemoryEngineService
 
     /**
      * Compact until under target tokens.
+     *
+     * @return array{success: bool, rounds: int, final_tokens: int}
      */
     public function compactUntilUnder(
         int $conversationId,

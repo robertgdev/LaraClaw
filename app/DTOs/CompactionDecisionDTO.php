@@ -57,6 +57,8 @@ readonly class CompactionDecisionDTO
 
     /**
      * Convert to array.
+     *
+     * @return array<string, bool|int|string>
      */
     public function toArray(): array
     {

@@ -11,6 +11,9 @@ use Carbon\CarbonInterface;
  */
 readonly class SummaryRecordDTO
 {
+    /**
+     * @param  array<int, string>  $fileIds
+     */
     public function __construct(
         public string $summaryId,
         public int $conversationId,
@@ -79,6 +82,8 @@ readonly class SummaryRecordDTO
 
     /**
      * Convert to array.
+     *
+     * @return array<string, int|string|array<int, string>|null>
      */
     public function toArray(): array
     {

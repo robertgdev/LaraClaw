@@ -7,6 +7,9 @@ namespace App\DTOs;
  */
 readonly class IntegrityCheckDTO
 {
+    /**
+     * @param  array<string, mixed>|null  $details
+     */
     public function __construct(
         public string $name,
         public string $status,
@@ -24,6 +27,8 @@ readonly class IntegrityCheckDTO
 
     /**
      * Create a failing check.
+     *
+     * @param  array<string, mixed>|null  $details
      */
     public static function fail(string $name, string $message, ?array $details = null): self
     {
@@ -32,6 +37,8 @@ readonly class IntegrityCheckDTO
 
     /**
      * Create a warning check.
+     *
+     * @param  array<string, mixed>|null  $details
      */
     public static function warn(string $name, string $message, ?array $details = null): self
     {
@@ -64,6 +71,8 @@ readonly class IntegrityCheckDTO
 
     /**
      * Convert to array.
+     *
+     * @return array<string, string|array<string, mixed>|null>
      */
     public function toArray(): array
     {

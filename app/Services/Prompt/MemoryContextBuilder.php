@@ -33,17 +33,6 @@ class MemoryContextBuilder
     {
         $sections = [];
 
-        // Get episodic memory context
-        $episodicContext = $this->memoryService->getContextForAgent(
-            $senderId,
-            $channel,
-            $message
-        );
-
-        if (! empty($episodicContext)) {
-            $sections[] = $episodicContext;
-        }
-
         // Get lossless memory context if enabled and conversation ID provided
         if ($conversationId && $this->memoryService->isLosslessEnabled()) {
             $losslessContext = $this->buildLosslessContext($conversationId);
