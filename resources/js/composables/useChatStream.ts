@@ -1,7 +1,8 @@
-import { ref, onUnmounted, watch, type Ref } from 'vue';
-import type { GatewayMessage } from '@/types/chat';
+import { ref, onUnmounted, watch  } from 'vue';
+import type {Ref} from 'vue';
 import { websocketConfig, getWebSocketUrl } from '@/config/websocket';
 import { useAuthStore } from '@/stores/auth';
+import type { GatewayMessage, FeedbackValue } from '@/types/chat';
 
 interface StreamChatPayload {
     runId?: string;
@@ -19,6 +20,10 @@ interface UseChatStreamOptions {
     onHistoryRefresh?: () => void;
     onConnectionChange?: (connected: boolean) => void;
     onConversationId?: (conversationId: string) => void;
+    /** Called when the server confirms feedback was saved for a message. */
+    onMessageFeedbackSaved?: (messageId: string, feedback: FeedbackValue) => void;
+    /** Called when the server confirms feedback was saved for a conversation. */
+    onConversationFeedbackSaved?: (conversationId: string, feedback: FeedbackValue) => void;
 }
 
 interface WebSocketMessage {
@@ -31,7 +36,7 @@ interface WebSocketMessage {
 }
 
 export function useChatStream(options: UseChatStreamOptions) {
-    const { sessionKey, friendlyId, onMessage, onStateChange, onHistoryRefresh, onConnectionChange, onConversationId } = options;
+    const { sessionKey, friendlyId, onMessage, onStateChange, onHistoryRefresh, onConnectionChange, onConversationId, onMessageFeedbackSaved, onConversationFeedbackSaved } = options;
 
     const authStore = useAuthStore();
     const isConnected = ref(false);
@@ -42,7 +47,6 @@ export function useChatStream(options: UseChatStreamOptions) {
     let websocket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-    let reconnectAttempt = 0;
     let currentReconnectInterval = websocketConfig.reconnectInterval;
 
     function stopStream() {
@@ -95,7 +99,6 @@ export function useChatStream(options: UseChatStreamOptions) {
         console.log('[WebSocket] Connected');
         isConnected.value = true;
         connectionStatus.value = 'connected';
-        reconnectAttempt = 0;
         currentReconnectInterval = websocketConfig.reconnectInterval;
 
         // Send authentication if we have a token
@@ -213,6 +216,28 @@ export function useChatStream(options: UseChatStreamOptions) {
             case 'pong':
                 // Heartbeat response
                 break;
+
+            case 'feedback_message_saved': {
+                // Server confirmed message feedback was stored
+                const savedData = (data.data || {}) as Record<string, unknown>;
+                const msgId = typeof savedData.message_id === 'string' ? savedData.message_id : '';
+                const fbVal = typeof savedData.feedback === 'number' ? savedData.feedback as FeedbackValue : null;
+                if (msgId && fbVal !== null) {
+                    onMessageFeedbackSaved?.(msgId, fbVal);
+                }
+                break;
+            }
+
+            case 'feedback_conversation_saved': {
+                // Server confirmed conversation feedback was stored
+                const convData = (data.data || {}) as Record<string, unknown>;
+                const convId = typeof convData.conversation_id === 'string' ? convData.conversation_id : '';
+                const convFb = typeof convData.feedback === 'number' ? convData.feedback as FeedbackValue : null;
+                if (convId && convFb !== null) {
+                    onConversationFeedbackSaved?.(convId, convFb);
+                }
+                break;
+            }
 
             case 'error':
                 error.value = data.message || 'Server error';
@@ -422,7 +447,6 @@ export function useChatStream(options: UseChatStreamOptions) {
         if (!websocketConfig.reconnect) return;
 
         connectionStatus.value = 'reconnecting';
-        reconnectAttempt++;
 
         reconnectTimer = setTimeout(() => {
             reconnectTimer = null;

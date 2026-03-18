@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\IntentMappingDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
 use App\Services\IntentClassificationService;
@@ -93,12 +94,14 @@ describe('SkillMatchCache Model', function () {
 
         $keywords = ['generate', 'image', 'sunset'];
 
-        SkillMatch::storeMatch(
+        $mapping = new IntentMappingDTO(
+            sampleIntent: 'Generate an image of a sunset',
             keywords: $keywords,
             skillId: $skill->id,
             confidence: 0.95,
-            category: 'creative'
+            category: 'creative',
         );
+        SkillMatch::storeMatch($mapping);
 
         $found = SkillMatch::findByKeywords($keywords);
 
@@ -151,12 +154,14 @@ describe('SkillMatchCache Model', function () {
         ]);
 
         // Create a cache entry
-        SkillMatch::storeMatch(
+        $mapping = new IntentMappingDTO(
+            sampleIntent: 'Generate beautiful sunset',
             keywords: ['generate', 'image', 'sunset', 'beautiful'],
             skillId: $skill->id,
             confidence: 0.90,
-            category: 'creative'
+            category: 'creative',
         );
+        SkillMatch::storeMatch($mapping);
 
         // Search with overlapping keywords
         $found = SkillMatch::findSimilar(['generate', 'image', 'mountains'], 0.7);
@@ -415,13 +420,14 @@ describe('IntentClassificationService with Cache', function () {
         $message = 'Generate an image of a sunset';
 
         // Store directly
-        SkillMatch::storeMatch(
+        $mapping = new IntentMappingDTO(
+            sampleIntent: $message,
             keywords: $keywords,
             skillId: $skill->id,
             confidence: 0.95,
             category: 'creative',
-            sampleMessage: $message
         );
+        SkillMatch::storeMatch($mapping);
 
         // Verify it was stored
         $cached = SkillMatch::findByKeywords($keywords);
@@ -448,23 +454,30 @@ describe('SkillSearchService with Cache', function () {
 
         // Pre-populate cache with a skill that exists in the skill index
         $keywords = ['generate', 'image'];
-        SkillMatch::storeMatch(
+        $mapping = new IntentMappingDTO(
+            sampleIntent: 'Generate image',
             keywords: $keywords,
             skillId: $skill->id,
             confidence: 0.9,
-            category: 'creative'
+            category: 'creative',
         );
+        SkillMatch::storeMatch($mapping);
 
         // Search should hit cache IF the skill exists in the index
         $results = $this->service->suggestSkillsForMessage('generate image');
 
         // The result depends on whether the skill exists in the index
         // If cache hit succeeds, we get from_cache=true
-        if (! empty($results) && isset($results[0]['from_cache']) && $results[0]['from_cache'] === true) {
-            expect($results[0])->toHaveKey('from_cache', true);
+        if ($results->isNotEmpty()) {
+            $first = $results->first();
+            if ($first->fromCache) {
+                expect($first->fromCache)->toBeTrue();
+            } else {
+                // Cache miss - skill not in index, fall back to search
+                expect($results)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
+            }
         } else {
-            // Cache miss - skill not in index, fall back to search
-            expect($results)->toBeArray();
+            expect($results)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
         }
     });
 
@@ -488,17 +501,23 @@ describe('SkillSearchService with Cache', function () {
         ]);
 
         // Create some cache entries
-        SkillMatch::storeMatch(
+        $mapping1 = new IntentMappingDTO(
+            sampleIntent: 'Test 1',
             keywords: ['test1'],
             skillId: $skill1->id,
-            confidence: 0.9
+            confidence: 0.9,
+            category: 'test',
         );
+        SkillMatch::storeMatch($mapping1);
 
-        SkillMatch::storeMatch(
+        $mapping2 = new IntentMappingDTO(
+            sampleIntent: 'Test 2',
             keywords: ['test2'],
             skillId: $skill2->id,
-            confidence: 0.8
+            confidence: 0.8,
+            category: 'test',
         );
+        SkillMatch::storeMatch($mapping2);
 
         $stats = $this->service->getCacheStatistics();
 
@@ -516,11 +535,14 @@ describe('SkillSearchService with Cache', function () {
         ]);
 
         // Create cache entry
-        SkillMatch::storeMatch(
+        $mapping = new IntentMappingDTO(
+            sampleIntent: 'Test',
             keywords: ['test'],
             skillId: $skill->id,
-            confidence: 0.9
+            confidence: 0.9,
+            category: 'test',
         );
+        SkillMatch::storeMatch($mapping);
 
         expect(SkillMatch::count())->toBe(1);
 

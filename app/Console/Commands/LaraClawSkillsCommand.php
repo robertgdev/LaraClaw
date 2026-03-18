@@ -2,13 +2,14 @@
 
 namespace App\Console\Commands;
 
+use App\DTOs\SkillClassificationResultDTO;
 use App\Models\Skill;
 use App\Services\SkillClassificationService;
 use Illuminate\Console\Command;
-
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\info;
 use function Laravel\Prompts\warning;
+use function Safe\json_encode;
 
 class LaraClawSkillsCommand extends Command
 {
@@ -153,23 +154,23 @@ class LaraClawSkillsCommand extends Command
     /**
      * Display the classification results.
      */
-    protected function displayResults(array $result): void
+    protected function displayResults(SkillClassificationResultDTO $result): void
     {
         $this->newLine();
         $this->line('<fg=green>  ┌──────────────────────────────────────────────────────────┐</>');
         $this->line('<fg=green>  │</> <fg=white;options=bold>  Classification Complete!</>                               <fg=green>│</>');
         $this->line('<fg=green>  │</>                                                          <fg=green>│</>');
-        $this->line("<fg=green>  │</>   <fg=cyan>Skills processed:</>    {$result['skills_processed']}                                 <fg=green>│</>");
-        $this->line("<fg=green>  │</>   <fg=cyan>Skills skipped:</>      {$result['skills_skipped']}                                 <fg=green>│</>");
-        $this->line("<fg=green>  │</>   <fg=cyan>Mappings generated:</>  {$result['mappings_generated']}                                 <fg=green>│</>");
-        $this->line("<fg=green>  │</>   <fg=cyan>Mappings stored:</>     {$result['mappings_stored']}                                 <fg=green>│</>");
+        $this->line("<fg=green>  │</>   <fg=cyan>Skills processed:</>    {$result->skillsProcessed}                                 <fg=green>│</>");
+        $this->line("<fg=green>  │</>   <fg=cyan>Skills skipped:</>      {$result->skillsSkipped}                                 <fg=green>│</>");
+        $this->line("<fg=green>  │</>   <fg=cyan>Mappings generated:</>  {$result->mappingsGenerated}                                 <fg=green>│</>");
+        $this->line("<fg=green>  │</>   <fg=cyan>Mappings stored:</>     {$result->mappingsStored}                                 <fg=green>│</>");
         $this->line('<fg=green>  │</>                                                          <fg=green>│</>');
         $this->line('<fg=green>  └──────────────────────────────────────────────────────────┘</>');
         $this->newLine();
 
-        if (! empty($result['errors'])) {
+        if ($result->errors) {
             warning('Errors occurred:');
-            foreach ($result['errors'] as $error) {
+            foreach ($result->errors as $error) {
                 $this->line("  - {$error}");
             }
             $this->newLine();
@@ -198,15 +199,15 @@ class LaraClawSkillsCommand extends Command
         $this->line('<fg=cyan>  '.str_repeat('=', 60).'</>');
         $this->newLine();
 
-        $this->line("  <info>Total entries:</info>       {$stats['total_entries']}");
-        $this->line("  <info>Total cache hits:</info>   {$stats['total_hits']}");
-        $this->line("  <info>Skills covered:</info>     {$stats['skills_covered']}");
+        $this->line("  <info>Total entries:</info>       {$stats->totalEntries}");
+        $this->line("  <info>Total cache hits:</info>   {$stats->totalHits}");
+        $this->line("  <info>Skills covered:</info>     {$stats->skillsCovered}");
         $this->newLine();
 
         $this->line('<fg=cyan>  Skill Classification Status:</>');
-        $this->line("    <fg=green>✓</> Classified:  {$stats['skills_classified']}");
-        $this->line("    <fg=yellow>○</> Pending:     {$stats['skills_pending']}");
-        $this->line("    <fg=red>✗</> Failed:      {$stats['skills_failed']}");
+        $this->line("    <fg=green>✓</> Classified:  {$stats->skillsClassified}");
+        $this->line("    <fg=yellow>○</> Pending:     {$stats->skillsPending}");
+        $this->line("    <fg=red>✗</> Failed:      {$stats->skillsFailed}");
         $this->newLine();
 
         return Command::SUCCESS;

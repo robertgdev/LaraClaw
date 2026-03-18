@@ -497,9 +497,9 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Started new session')
-                ->and($result['session'])->toBeInstanceOf(Conversation::class);
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Started new session')
+                ->and($result->session)->toBeInstanceOf(Conversation::class);
         });
 
         it('handles show_sessions intent', function () {
@@ -516,8 +516,8 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Your sessions:');
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Your sessions:');
         });
 
         it('handles switch_session intent', function () {
@@ -535,9 +535,9 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Switched to:')
-                ->and($result['session'])->not->toBeNull();
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Switched to:')
+                ->and($result->session)->not->toBeNull();
         });
 
         it('handles invalid switch_session number', function () {
@@ -551,8 +551,8 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Invalid session number');
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Invalid session number');
         });
 
         it('handles rename_session intent', function () {
@@ -569,8 +569,8 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Session renamed to: My Project');
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Session renamed to: My Project');
         });
 
         it('handles pin_session intent', function () {
@@ -587,8 +587,8 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Session pinned:');
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Session pinned:');
         });
 
         it('handles unpin_session intent', function () {
@@ -606,8 +606,8 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Session unpinned:');
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Session unpinned:');
         });
 
         it('handles delete_session intent', function () {
@@ -624,8 +624,8 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeTrue()
-                ->and($result['response'])->toContain('Session deleted:');
+            expect($result->handled)->toBeTrue()
+                ->and($result->response)->toContain('Session deleted:');
         });
 
         it('returns handled=false for unknown intent', function () {
@@ -639,9 +639,9 @@ describe('SessionService', function () {
             );
 
             // Assert
-            expect($result['handled'])->toBeFalse()
-                ->and($result['response'])->toBeNull()
-                ->and($result['session'])->toBeNull();
+            expect($result->handled)->toBeFalse()
+                ->and($result->response)->toBeNull()
+                ->and($result->session)->toBeNull();
         });
     });
 
@@ -671,8 +671,10 @@ describe('SessionService', function () {
 
             // Assert
             expect($history)->toHaveCount(2)
-                ->and($history[0])->toBe(['role' => 'user', 'content' => 'Hello'])
-                ->and($history[1])->toBe(['role' => 'assistant', 'content' => 'Hi there!']);
+                ->and($history[0]->role)->toBe('user')
+                ->and($history[0]->content)->toBe('Hello')
+                ->and($history[1]->role)->toBe('assistant')
+                ->and($history[1]->content)->toBe('Hi there!');
         });
 
         it('respects limit parameter', function () {

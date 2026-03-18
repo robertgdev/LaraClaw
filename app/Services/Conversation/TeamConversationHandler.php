@@ -87,29 +87,29 @@ class TeamConversationHandler
             $agents
         );
 
-        if (! empty($teammateMentions) && ! $conv->isMaxMessagesReached()) {
+        if ($teammateMentions->isNotEmpty() && ! $conv->isMaxMessagesReached()) {
             // Enqueue internal messages for each mention
             $conv->incrementPending(count($teammateMentions));
             $conversationManager->update($conv);
 
             foreach ($teammateMentions as $mention) {
-                MultiLogger::info("@{$agentId} → @{$mention['teammateId']}");
+                MultiLogger::info("@{$agentId} → @{$mention->teammateId}");
                 Event::emit('chain_handoff', [
                     'teamId' => $team->team_id,
                     'fromAgent' => $agentId,
-                    'toAgent' => $mention['teammateId'],
+                    'toAgent' => $mention->teammateId,
                 ]);
 
-                $internalMsg = "[Message from teammate @{$agentId}]:\n{$mention['message']}";
+                $internalMsg = "[Message from teammate @{$agentId}]:\n{$mention->message}";
                 $this->enqueueInternalMessage(
                     $message,
                     $conv->id,
                     $agentId,
-                    $mention['teammateId'],
+                    $mention->teammateId,
                     $internalMsg
                 );
             }
-        } elseif (! empty($teammateMentions)) {
+        } elseif ($teammateMentions->isNotEmpty()) {
             MultiLogger::warning("Conversation {$conv->id} hit max messages ({$conv->maxMessages}) — not enqueuing further mentions");
         }
 
@@ -191,9 +191,9 @@ class TeamConversationHandler
         // Send response
         $this->deliveryService->sendResponse(
             $message,
-            $result['message'],
+            $result->message,
             $primaryAgentId,
-            $result['files'],
+            $result->files,
             $primaryAgentName,
             $primaryProvider,
             $primaryModel

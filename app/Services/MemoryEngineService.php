@@ -2,262 +2,267 @@
 
 namespace App\Services;
 
-use App\Enums\ChannelEnum;
-use App\Enums\EpisodicEventTypeEnum;
-use App\Models\Memory;
-use App\Services\Memory\MemoryConsolidator;
-use App\Services\Memory\MemoryRelevanceScorer;
-use App\Services\Memory\SearchStrategyFactory;
-use App\Services\Memory\SearchStrategyInterface;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
+use App\DTOs\CompactionDecisionDTO;
+use App\DTOs\CompactionResultDTO;
+use App\DTOs\ContextItemDTO;
+use App\DTOs\IntegrityReportDTO;
+use App\DTOs\SummaryRecordDTO;
+use App\Helpers\TokenEstimatorHelper;
+use App\Models\ConversationMessage;
+use App\Services\Memory\CompactionEngine;
+use App\Services\Memory\IntegrityChecker;
+use App\Services\Memory\SummaryStore;
 
 /**
- * Adaptive Memory Engine - 3-layer memory system.
+ * Memory Engine - Lossless Memory System.
  *
- * Layer 1: Episodic Memory — timestamped events with outcomes & importance scoring
- * Layer 2: Semantic Index — Full-text search with BM25 ranking
- * Layer 3: Temporal Decay — Ebbinghaus forgetting curve + access frequency strengthening
+ * Provides hierarchical memory management with:
+ * - Hierarchical summaries with depth levels
+ * - Context items with ordered ordinals
+ * - Fresh tail protection for recent messages
+ * - Three-level summarization escalation
  *
  * This service acts as a façade, delegating to:
- * - {@see MemoryRelevanceScorer} for scoring and text processing
- * - {@see MemoryConsolidator} for decay, pruning, and merge operations
- * - {@see SearchStrategyInterface} for search backend abstraction
+ * - {@see SummaryStore} for lossless memory persistence
+ * - {@see CompactionEngine} for lossless memory compaction
+ * - {@see IntegrityChecker} for lossless memory integrity validation
  */
 class MemoryEngineService
 {
-    private const FTS_MAX_RESULTS = 50;
+    private SummaryStore $summaryStore;
 
-    private const CONTEXT_MAX_RESULTS = 10;
+    private CompactionEngine $compactionEngine;
 
-    private SearchStrategyInterface $searchStrategy;
-
-    private MemoryRelevanceScorer $scorer;
-
-    private MemoryConsolidator $consolidator;
+    private IntegrityChecker $integrityChecker;
 
     public function __construct(
-        ?MemoryRelevanceScorer $scorer = null,
-        ?MemoryConsolidator $consolidator = null
+        ?SummaryStore $summaryStore = null,
+        ?CompactionEngine $compactionEngine = null,
+        ?IntegrityChecker $integrityChecker = null
     ) {
-        $this->scorer = $scorer ?? new MemoryRelevanceScorer;
-        $this->consolidator = $consolidator ?? new MemoryConsolidator($this->scorer);
-        $this->searchStrategy = SearchStrategyFactory::create();
+        $this->summaryStore = $summaryStore ?? new SummaryStore;
+        $this->integrityChecker = $integrityChecker ?? new IntegrityChecker($this->summaryStore);
+
+        // Create CompactionEngine with config values
+        $this->compactionEngine = $compactionEngine ?? new CompactionEngine(
+            $this->summaryStore,
+            [
+                'context_threshold' => (float) config('laraclaw.memory.lossless_context_threshold', 0.75),
+                'fresh_tail_count' => (int) config('laraclaw.memory.lossless_fresh_tail', 8),
+            ]
+        );
     }
 
     /**
-     * Check if memory storage is enabled.
+     * Check if lossless memory is enabled.
      */
     public function isEnabled(): bool
     {
-        return config('laraclaw.memory.length', 200) >= 0;
+        return $this->isLosslessEnabled();
     }
 
     /**
-     * Truncate text based on memory length configuration.
-     *
-     * @return string|null Truncated text, or null if memory is disabled
+     * Check if lossless memory is enabled.
      */
-    public function truncateText(?string $text): ?string
+    public function isLosslessEnabled(): bool
     {
-        if ($text === null) {
-            return null;
-        }
-
-        $length = (int)config('laraclaw.memory.length', 200);
-
-        // -1 means memory is disabled
-        if ($length < 0) {
-            return null;
-        }
-
-        // 0 means no truncation
-        if ($length === 0) {
-            return $text;
-        }
-
-        // Truncate to configured length
-        return Str::limit($text, $length);
+        return config('laraclaw.memory.lossless_enabled', true);
     }
 
     // ==========================================
-    // Core Operations
+    // Lossless Memory Operations
     // ==========================================
 
     /**
-     * Record an episodic event.
-     *
-     * @param  array{type: EpisodicEventTypeEnum|string, content: string, outcome?: string|null, importance?: float, agent_id?: string|null}  $event
+     * Get the summary store instance.
      */
-    public function recordEvent(
-        string $senderId,
-        ChannelEnum $channel,
-        array $event
-    ): string {
-        $id = (string) Str::uuid();
-
-        $eventType = $event['type'] instanceof EpisodicEventTypeEnum
-            ? $event['type']
-            : EpisodicEventTypeEnum::from($event['type']);
-
-        $importance = $event['importance']
-            ?? $eventType->defaultImportance();
-
-        Memory::create([
-            'id' => $id,
-            'sender_id' => $senderId,
-            'channel' => $channel,
-            'agent_id' => $event['agent_id'] ?? null,
-            'event_type' => $eventType,
-            'content' => $event['content'],
-            'outcome' => $event['outcome'] ?? null,
-            'importance' => $importance,
-            'access_count' => 0,
-            'last_accessed_at' => now(),
-        ]);
-
-        return $id;
+    public function getSummaryStore(): SummaryStore
+    {
+        return $this->summaryStore;
     }
 
     /**
-     * Search memories with hybrid scoring.
-     *
-     * @return array<int, array{id: string, content: string, relevance_score: float, source: string}>
+     * Get the compaction engine instance.
      */
-    public function search(
-        string $senderId,
-        ChannelEnum $channel,
-        string $query,
-        int $limit = 20
+    public function getCompactionEngine(): CompactionEngine
+    {
+        return $this->compactionEngine;
+    }
+
+    /**
+     * Get the integrity checker instance.
+     */
+    public function getIntegrityChecker(): IntegrityChecker
+    {
+        return $this->integrityChecker;
+    }
+
+    /**
+     * Append a message to the lossless context.
+     */
+    public function appendMessageToContext(int $conversationId, int $messageId): void
+    {
+        $this->summaryStore->appendContextMessage($conversationId, $messageId);
+    }
+
+    /**
+     * Append multiple messages to the lossless context.
+     *
+     * @param  array<int>  $messageIds
+     */
+    public function appendMessagesToContext(int $conversationId, array $messageIds): void
+    {
+        $this->summaryStore->appendContextMessages($conversationId, $messageIds);
+    }
+
+    /**
+     * Get context items for a conversation.
+     *
+     * @return array<ContextItemDTO>
+     */
+    public function getContextItems(int $conversationId): array
+    {
+        return $this->summaryStore->getContextItems($conversationId);
+    }
+
+    /**
+     * Get total token count for a conversation's context.
+     */
+    public function getContextTokenCount(int $conversationId): int
+    {
+        return $this->summaryStore->getContextTokenCount($conversationId);
+    }
+
+    /**
+     * Get all summaries for a conversation.
+     *
+     * @return array<SummaryRecordDTO>
+     */
+    public function getSummaries(int $conversationId): array
+    {
+        return $this->summaryStore->getSummariesByConversation($conversationId);
+    }
+
+    /**
+     * Get a specific summary by ID.
+     */
+    public function getSummary(string $summaryId): ?SummaryRecordDTO
+    {
+        return $this->summaryStore->getSummary($summaryId);
+    }
+
+    /**
+     * Evaluate whether compaction is needed.
+     */
+    public function evaluateCompaction(
+        int $conversationId,
+        int $tokenBudget,
+        ?int $observedTokenCount = null
+    ): CompactionDecisionDTO {
+        return $this->compactionEngine->evaluate($conversationId, $tokenBudget, $observedTokenCount);
+    }
+
+    /**
+     * Run compaction on a conversation.
+     *
+     * @param  callable|null  $summarize  Function to generate summaries (receives content, returns summary)
+     */
+    public function compact(
+        int $conversationId,
+        int $tokenBudget,
+        ?callable $summarize = null,
+        bool $force = false,
+        bool $hardTrigger = false
+    ): CompactionResultDTO {
+        return $this->compactionEngine->compact(
+            $conversationId,
+            $tokenBudget,
+            $summarize,
+            $force,
+            $hardTrigger
+        );
+    }
+
+    /**
+     * Compact until under target tokens.
+     *
+     * @return array{success: bool, rounds: int, final_tokens: int}
+     */
+    public function compactUntilUnder(
+        int $conversationId,
+        int $tokenBudget,
+        ?int $targetTokens = null,
+        ?int $currentTokens = null,
+        ?callable $summarize = null
     ): array {
-        $results = [];
-        $now = now()->timestamp * 1000;
-
-        // Layer 1: Full-text search via strategy
-        $ftsResults = $this->searchStrategy->search($senderId, $channel, $query, self::FTS_MAX_RESULTS);
-        $maxScore = $ftsResults->max('search_score') ?? 1.0;
-
-        foreach ($ftsResults as $result) {
-            $relevanceScore = $this->scorer->score(
-                rawFtsScore: $result->search_score ?? 0,
-                maxFtsScore: $maxScore,
-                lastAccessedAtMs: $result->last_accessed_at->timestamp * 1000,
-                accessCount: $result->access_count,
-                importance: $result->importance,
-                nowMs: $now
-            );
-
-            $results[] = [
-                'id' => $result->id,
-                'content' => $result->content.($result->outcome ? " → {$result->outcome}" : ''),
-                'relevance_score' => round($relevanceScore, 4),
-                'source' => 'episodic',
-            ];
-        }
-
-        // Sort by relevance and limit
-        usort($results, fn ($a, $b) => $b['relevance_score'] <=> $a['relevance_score']);
-
-        return array_slice($results, 0, $limit);
+        return $this->compactionEngine->compactUntilUnder(
+            $conversationId,
+            $tokenBudget,
+            $targetTokens,
+            $currentTokens,
+            $summarize
+        );
     }
 
     /**
-     * Get formatted context for agent prompt injection.
+     * Run integrity check on a conversation.
      */
-    public function getContextForAgent(
-        string $senderId,
-        ChannelEnum $channel,
-        ?string $query = null
-    ): string {
-        $sections = [];
+    public function checkIntegrity(int $conversationId): IntegrityReportDTO
+    {
+        return $this->integrityChecker->scan($conversationId);
+    }
 
-        // Query-relevant memories
-        if ($query) {
-            $results = $this->search($senderId, $channel, $query, self::CONTEXT_MAX_RESULTS);
-            if (! empty($results)) {
-                $sections[] = "\n## Relevant Memories";
-                foreach ($results as $result) {
-                    $icon = $result['source'] === 'episodic' ? '📝' : '🔑';
-                    $sections[] = "{$icon} {$result['content']}";
+    /**
+     * Get repair suggestions for integrity issues.
+     *
+     * @return array<string>
+     */
+    public function getRepairPlan(IntegrityReportDTO $report): array
+    {
+        return IntegrityChecker::repairPlan($report);
+    }
+
+    /**
+     * Build context string from lossless memory for agent prompts.
+     */
+    public function getLosslessContextForAgent(int $conversationId, int $maxTokens = 4000): string
+    {
+        $contextItems = $this->summaryStore->getContextItems($conversationId);
+        $sections = [];
+        $currentTokens = 0;
+
+        // Process items in reverse order (newest first) to prioritize recent context
+        $reversedItems = array_reverse($contextItems);
+
+        foreach ($reversedItems as $item) {
+            $content = '';
+            $tokens = 0;
+
+            if ($item->isMessage() && $item->messageId) {
+                $message = ConversationMessage::find($item->messageId);
+                if ($message) {
+                    $content = $message->message;
+                    $tokens = TokenEstimatorHelper::estimate($content ?? '');
+                }
+            } elseif ($item->isSummary() && $item->summaryId) {
+                $summary = $this->summaryStore->getSummary($item->summaryId);
+                if ($summary) {
+                    $depthLabel = $summary->depth > 0 ? " (depth {$summary->depth})" : '';
+                    $content = "[Summary{$depthLabel}]\n{$summary->content}";
+                    $tokens = $summary->tokenCount;
                 }
             }
-        }
 
-        // High-importance recent memories
-        $highImportance = Memory::forSender($senderId, $channel)
-            ->highImportance()
-            ->latest()
-            ->limit(5)
-            ->get();
+            if ($content && $currentTokens + $tokens <= $maxTokens) {
+                array_unshift($sections, $content);
+                $currentTokens += $tokens;
+            }
 
-        if ($highImportance->isNotEmpty()) {
-            $sections[] = "\n## Important Context";
-            foreach ($highImportance as $event) {
-                $sections[] = "{$event->event_type->label()}: {$event->content}";
+            if ($currentTokens >= $maxTokens) {
+                break;
             }
         }
 
-        return implode("\n", $sections);
-    }
-
-    /**
-     * Consolidate memories: decay, prune, merge.
-     *
-     * @return array{decayed: int, pruned: int, merged: int}
-     */
-    public function consolidate(string $senderId, ChannelEnum $channel): array
-    {
-        return $this->consolidator->consolidate($senderId, $channel);
-    }
-
-    /**
-     * Strengthen a memory (bump access count).
-     */
-    public function reinforce(string $memoryId): void
-    {
-        Memory::where('id', $memoryId)->increment('access_count', 1, [
-            'last_accessed_at' => now(),
-        ]);
-    }
-
-    /**
-     * Get a single episodic memory by ID.
-     */
-    public function getEvent(string $id): ?Memory
-    {
-        return Memory::find($id);
-    }
-
-    /**
-     * Get all episodic memories for a user.
-     *
-     * @return Collection<\App\Models\Memory>
-     */
-    public function getEvents(string $senderId, ChannelEnum $channel, ?int $limit = null): Collection
-    {
-        $query = Memory::forSender($senderId, $channel)
-            ->latest();
-
-        if ($limit) {
-            $query->limit($limit);
-        }
-
-        return $query->get();
-    }
-
-    /**
-     * Get the relevance scorer instance.
-     */
-    public function getScorer(): MemoryRelevanceScorer
-    {
-        return $this->scorer;
-    }
-
-    /**
-     * Get the consolidator instance.
-     */
-    public function getConsolidator(): MemoryConsolidator
-    {
-        return $this->consolidator;
+        return implode("\n\n---\n\n", $sections);
     }
 }

@@ -8,6 +8,23 @@ use App\Services\CommandProcessingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
+use function Safe\getmypid;
+use function Safe\json_decode;
+use function Safe\json_encode;
+use function Safe\pcntl_signal;
+use function Safe\pcntl_signal_dispatch;
+use function Safe\posix_kill;
+use function Safe\preg_match;
+use function Safe\socket_accept;
+use function Safe\socket_bind;
+use function Safe\socket_create;
+use function Safe\socket_listen;
+use function Safe\socket_read;
+use function Safe\socket_set_nonblock;
+use function Safe\socket_set_option;
+use function Safe\socket_write;
+use function Safe\unpack;
+
 class LaraClawServerCommand extends Command
 {
     /**
@@ -33,10 +50,12 @@ class LaraClawServerCommand extends Command
 
     protected int $port;
 
-    protected $server = null;
+    protected ?\Socket $server = null;
 
+    /** @var \Socket[] */
     protected array $clients = [];
 
+    /** @var int[] */
     protected array $clientAuth = []; // Track authenticated clients by socket object ID
 
     protected bool $running = false;
@@ -61,11 +80,20 @@ class LaraClawServerCommand extends Command
             return Command::FAILURE;
         }
 
-        return match ($action) {
-            'start' => $this->startServer(),
-            'stop' => $this->stopServer(),
-            'status' => $this->showStatus(),
-        };
+        try {
+            $rc = match ($action) {
+                'start' => $this->startServer(),
+                'stop' => $this->stopServer(),
+                'status' => $this->showStatus(),
+            };
+        } catch (\Throwable $exception) {
+            $this->error($exception->getMessage());
+            if (app()->environment('local')) {
+                $this->error($exception->getTraceAsString());
+            }
+        }
+
+        return Command::FAILURE;
     }
 
     /**
@@ -103,30 +131,13 @@ class LaraClawServerCommand extends Command
         // Create server socket
         $this->server = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
 
-        if ($this->server === false) {
-            $this->error('Failed to create socket: '.socket_strerror(socket_last_error()));
-
-            return Command::FAILURE;
-        }
-
         // Set socket options
         socket_set_option($this->server, SOL_SOCKET, SO_REUSEADDR, 1);
         socket_set_nonblock($this->server);
 
         // Bind and listen
-        if (! socket_bind($this->server, $this->host, $this->port)) {
-            $this->error('Failed to bind socket: '.socket_strerror(socket_last_error()));
-            socket_close($this->server);
-
-            return Command::FAILURE;
-        }
-
-        if (! socket_listen($this->server, 10)) {
-            $this->error('Failed to listen on socket: '.socket_strerror(socket_last_error()));
-            socket_close($this->server);
-
-            return Command::FAILURE;
-        }
+        socket_bind($this->server, $this->host, $this->port);
+        socket_listen($this->server, 10);
 
         // Save PID file and start time
         $this->savePid();
@@ -159,20 +170,15 @@ class LaraClawServerCommand extends Command
         $this->info("Stopping LaraClaw server (PID: {$pid})...");
 
         // Send SIGTERM to the process
-        if (posix_kill($pid, SIGTERM)) {
-            $this->line('<fg=green>✓</> Server stopped');
+        posix_kill($pid, SIGTERM);
+        $this->line('<fg=green>✓</> Server stopped');
 
-            // Clean up PID file
-            if (File::exists($this->pidFile)) {
-                File::delete($this->pidFile);
-            }
-
-            return Command::SUCCESS;
+        // Clean up PID file
+        if (File::exists($this->pidFile)) {
+            File::delete($this->pidFile);
         }
 
-        $this->error('Failed to stop server');
-
-        return Command::FAILURE;
+        return Command::SUCCESS;
     }
 
     /**
@@ -260,26 +266,21 @@ class LaraClawServerCommand extends Command
      */
     protected function acceptConnection(): void
     {
-        $client = socket_accept($this->server);
+        $clientSocket = socket_accept($this->server);
+        $request = socket_read($clientSocket, 5000); // Perform WebSocket handshake
 
-        if ($client === false) {
-            return;
-        }
-
-        // Perform WebSocket handshake
-        $request = socket_read($client, 5000);
-
-        if (! $this->performHandshake($client, $request)) {
-            socket_close($client);
-
+        try {
+            $this->performHandshake($clientSocket, $request);
+        } catch (\Throwable $exception) {
+            socket_close($clientSocket);
             return;
         }
 
         // Get client ID for tracking
-        $clientId = spl_object_id($client);
+        $clientId = spl_object_id($clientSocket);
 
         // Store client as unauthenticated initially
-        $this->clients[] = $client;
+        $this->clients[] = $clientSocket;
         $this->clientAuth[$clientId] = false;
 
         MultiLogger::info("Client connected: {$clientId}");
@@ -290,13 +291,13 @@ class LaraClawServerCommand extends Command
             success: true,
             message: 'Authentication required',
         );
-        $this->sendToClient($client, $authResponse);
+        $this->sendToClient($clientSocket, $authResponse);
     }
 
     /**
      * Perform WebSocket handshake.
      */
-    protected function performHandshake($client, string $request): bool
+    protected function performHandshake(\Socket $client, string $request): bool
     {
         // Parse the WebSocket key from the request
         if (! preg_match('/Sec-WebSocket-Key:\s*(.+?)\r\n/i', $request, $matches)) {
@@ -320,7 +321,7 @@ class LaraClawServerCommand extends Command
     /**
      * Handle a message from a client.
      */
-    protected function handleClientMessage($client): void
+    protected function handleClientMessage(\Socket $client): void
     {
         $data = $this->readWebSocketFrame($client);
 
@@ -339,12 +340,24 @@ class LaraClawServerCommand extends Command
      * Process a message from a client.
      * Delegates to CommandProcessingService for all command handling.
      */
-    protected function processMessage($client, string $message): void
+    protected function processMessage(\Socket $client, string $message): void
     {
         $clientId = spl_object_id($client);
 
         // Try to parse the message as JSON
-        $data = json_decode($message, true);
+        try {
+            $data = json_decode($message, true);
+        } catch (\Safe\Exceptions\JsonException $e) {
+            // Invalid JSON, send error response
+            $response = new CommandResponseDTO(
+                type: 'error',
+                success: false,
+                message: 'Invalid JSON: '.$e->getMessage(),
+            );
+            $this->sendToClient($client, $response);
+
+            return;
+        }
 
         // Handle authentication
         if ($data && isset($data['type']) && $data['type'] === 'auth') {
@@ -354,12 +367,12 @@ class LaraClawServerCommand extends Command
         }
 
         // Check if client is authenticated
-        if (! $this->clientAuth[$clientId] ?? false) {
+        if (!($this->clientAuth[$clientId] ?? false)) {
             // Send auth required message
             $authResponse = new CommandResponseDTO(
-                type: 'auth_required',
-                success: false,
+                type   : 'auth_required',
                 message: 'Authentication required. Please send an "auth" message with your token.',
+                success: false,
             );
             $this->sendToClient($client, $authResponse);
 
@@ -393,7 +406,7 @@ class LaraClawServerCommand extends Command
     /**
      * Handle authentication request from client.
      */
-    protected function handleAuthentication($client, string $token): void
+    protected function handleAuthentication(\Socket $client, string $token): void
     {
         $clientId = spl_object_id($client);
         $validToken = $this->getApiKey();
@@ -441,7 +454,7 @@ class LaraClawServerCommand extends Command
     /**
      * Send a CommandResponseDTO to a client.
      */
-    protected function sendToClient($client, CommandResponseDTO $response): void
+    protected function sendToClient(\Socket $client, CommandResponseDTO $response): void
     {
         $json = json_encode($response->toArray());
         $frame = $this->encodeWebSocketFrame($json);
@@ -451,11 +464,11 @@ class LaraClawServerCommand extends Command
     /**
      * Read a WebSocket frame.
      */
-    protected function readWebSocketFrame($client): ?string
+    protected function readWebSocketFrame(\Socket $client): ?string
     {
         $data = socket_read($client, 8192);
 
-        if ($data === false || $data === '') {
+        if (!$data) {
             return null;
         }
 
@@ -535,7 +548,7 @@ class LaraClawServerCommand extends Command
     /**
      * Disconnect a client.
      */
-    protected function disconnectClient($client): void
+    protected function disconnectClient(\Socket $client): void
     {
         $clientId = spl_object_id($client);
         $key = array_search($client, $this->clients, true);
@@ -599,8 +612,15 @@ class LaraClawServerCommand extends Command
             return false;
         }
 
-        // Check if process is running
-        return posix_kill($pid, 0);
+        // Check if process is running (signal 0 doesn't kill, just checks)
+        try {
+            posix_kill($pid, 0);
+
+            return true;
+        } catch (\Safe\Exceptions\PosixException $e) {
+            // Process doesn't exist
+            return false;
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Skills\ClassificationResponseParser;
+use App\TypedCollections\IntentMappingDTOCollection;
 
 beforeEach(function () {
     $this->parser = new ClassificationResponseParser;
@@ -29,24 +30,26 @@ JSON;
 
             $result = $this->parser->parse($response, 42);
 
-            expect($result)->toHaveCount(2)
-                ->and($result[0])->toHaveKeys(['sample_intent', 'keywords', 'skill_id', 'confidence', 'category'])
-                ->and($result[0]['skill_id'])->toBe(42)
-                ->and($result[0]['sample_intent'])->toBe('Generate an image of a sunset')
-                ->and($result[0]['confidence'])->toBe(0.95)
-                ->and($result[1]['skill_id'])->toBe(42);
+            expect($result)->toBeInstanceOf(IntentMappingDTOCollection::class)
+                ->toHaveCount(2)
+                ->and($result[0]->sampleIntent)->toBe('Generate an image of a sunset')
+                ->and($result[0]->skillId)->toBe(42)
+                ->and($result[0]->confidence)->toBe(0.95)
+                ->and($result[1]->skillId)->toBe(42);
         });
 
-        it('returns empty array for invalid JSON', function () {
+        it('returns empty collection for invalid JSON', function () {
             $result = $this->parser->parse('This is not valid JSON at all');
 
-            expect($result)->toBeEmpty();
+            expect($result)->toBeInstanceOf(IntentMappingDTOCollection::class)
+                ->toBeEmpty();
         });
 
-        it('returns empty array for JSON without array', function () {
+        it('returns empty collection for JSON without array', function () {
             $result = $this->parser->parse('{"not": "an array"}');
 
-            expect($result)->toBeEmpty();
+            expect($result)->toBeInstanceOf(IntentMappingDTOCollection::class)
+                ->toBeEmpty();
         });
 
         it('filters entries missing sample_intent', function () {
@@ -60,7 +63,7 @@ JSON;
             $result = $this->parser->parse($response);
 
             expect($result)->toHaveCount(1)
-                ->and($result[0]['sample_intent'])->toBe('Valid entry');
+                ->and($result[0]->sampleIntent)->toBe('Valid entry');
         });
 
         it('applies defaults for missing optional fields', function () {
@@ -69,10 +72,10 @@ JSON;
             $result = $this->parser->parse($response);
 
             expect($result)->toHaveCount(1)
-                ->and($result[0]['keywords'])->toBe([])
-                ->and($result[0]['confidence'])->toBe(0.8)
-                ->and($result[0]['category'])->toBe('unknown')
-                ->and($result[0]['skill_id'])->toBeNull();
+                ->and($result[0]->keywords)->toBe([])
+                ->and($result[0]->confidence)->toBe(0.8)
+                ->and($result[0]->category)->toBe('unknown')
+                ->and($result[0]->skillId)->toBeNull();
         });
 
         it('passes skill_id to all mappings', function () {
@@ -80,8 +83,8 @@ JSON;
 
             $result = $this->parser->parse($response, 99);
 
-            expect($result[0]['skill_id'])->toBe(99)
-                ->and($result[1]['skill_id'])->toBe(99);
+            expect($result[0]->skillId)->toBe(99)
+                ->and($result[1]->skillId)->toBe(99);
         });
 
         it('extracts JSON from surrounding text', function () {

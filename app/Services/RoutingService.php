@@ -2,12 +2,17 @@
 
 namespace App\Services;
 
+use App\DTOs\AgentRoutingDTO;
 use App\DTOs\RoutingResultDTO;
+use App\DTOs\SkillSearchResultDTO;
+use App\DTOs\TeammateMentionDTO;
 use App\Logging\MultiLogger;
 use App\Models\Agent;
 use App\Models\Team;
 use App\TypedCollections\AgentCollection;
+use App\TypedCollections\SkillSearchResultDTOCollection;
 use App\TypedCollections\TeamCollection;
+use App\TypedCollections\TeammateMentionDTOCollection;
 
 use function Safe\preg_match;
 use function Safe\preg_match_all;
@@ -84,7 +89,7 @@ class RoutingService
         string $teamId,
         TeamCollection $teams,
         AgentCollection $agents
-    ): array {
+    ): TeammateMentionDTOCollection {
         $results = [];
         $seen = [];
 
@@ -92,7 +97,7 @@ class RoutingService
         $tagRegex = '/\[@(\S+?):\s*([\s\S]*?)\]/';
 
         if (! preg_match_all($tagRegex, $response, $matches, PREG_SET_ORDER)) {
-            return $results;
+            return new TeammateMentionDTOCollection([]);
         }
 
         // Strip all [@teammate: ...] tags from the full response to get shared context
@@ -111,16 +116,16 @@ class RoutingService
 
             foreach ($candidateIds as $candidateId) {
                 if (! isset($seen[$candidateId]) && $this->isTeammate($candidateId, $currentAgentId, $teamId, $teams, $agents)) {
-                    $results[] = [
-                        'teammateId' => $candidateId,
-                        'message' => $fullMessage,
-                    ];
+                    $results[] = new TeammateMentionDTO(
+                        teammateId: $candidateId,
+                        message: $fullMessage,
+                    );
                     $seen[$candidateId] = true;
                 }
             }
         }
 
-        return $results;
+        return new TeammateMentionDTOCollection($results);
     }
 
     /**
@@ -135,11 +140,13 @@ class RoutingService
 
     /**
      * Detect if message mentions multiple agents (easter egg for future feature).
+     *
+     * @return array<string>
      */
     public function detectMultipleAgents(string $message, AgentCollection $agents, TeamCollection $teams): array
     {
         preg_match_all('/@(\S+)/', $message, $matches);
-        $mentions = $matches[0] ?? [];
+        $mentions = $matches[0];
         $validAgents = [];
 
         foreach ($mentions as $mention) {
@@ -181,13 +188,13 @@ class RoutingService
         // Step 1: Check for explicit @agent_id or @team_id routing
         $explicitRouting = $this->parseAgentRouting($rawMessage, $agents, $teams);
 
-        if ($explicitRouting['agentId'] !== $defaultAgentId) {
+        if ($explicitRouting->agentId !== $defaultAgentId) {
             // Explicit routing takes precedence
             return new RoutingResultDTO(
-                agentId: $explicitRouting['agentId'],
-                message: $explicitRouting['message'],
-                isTeamRouted: $explicitRouting['isTeam'] ?? false,
-                teamId: $explicitRouting['teamId'] ?? null,
+                agentId: $explicitRouting->agentId,
+                message: $explicitRouting->message,
+                isTeamRouted: $explicitRouting->isTeam,
+                teamId: $explicitRouting->teamId,
                 routingMethod: 'explicit',
                 classification: null,
                 suggestedSkills: [],
@@ -212,8 +219,9 @@ class RoutingService
         $routingMethod = 'default';
 
         // If we have a strong agent suggestion, use it
-        if ($agentSuggestion['best_match'] && $agentSuggestion['best_match']['score'] >= 0.5) {
-            $agentId = $agentSuggestion['best_match']['agent_id'];
+        $bestMatch = $agentSuggestion->bestMatch;
+        if ($bestMatch && $bestMatch->score >= 0.5) {
+            $agentId = $bestMatch->agentId;
             $routingMethod = 'intent';
         }
 
@@ -227,7 +235,7 @@ class RoutingService
         }
 
         // Check if any agent has matching skills
-        if ($agentId === $defaultAgentId && ! empty($skillResults)) {
+        if ($agentId === $defaultAgentId && $skillResults->isNotEmpty()) {
             $skillAgent = $this->findAgentForSkills($skillResults, $agents);
             if ($skillAgent) {
                 $agentId = $skillAgent;
@@ -251,15 +259,19 @@ class RoutingService
             teamId: $teamId,
             routingMethod: $routingMethod,
             classification: $classification,
-            suggestedSkills: array_map(fn ($s) => $s['skill']['name'], $skillResults),
-            agentSuggestion: $agentSuggestion['best_match'],
+            suggestedSkills: $skillResults->map(fn (SkillSearchResultDTO $s) => $s->skill->name)->all(),
+            agentSuggestion: $bestMatch ? [
+                'agent_id' => $bestMatch->agentId,
+                'score' => $bestMatch->score,
+                'reasons' => $bestMatch->reasons,
+            ] : null,
         );
     }
 
     /**
      * Parse @agent_id or @team_id prefix from a message.
      */
-    public function parseAgentRouting(string $rawMessage, AgentCollection $agents, TeamCollection $teams): array
+    public function parseAgentRouting(string $rawMessage, AgentCollection $agents, TeamCollection $teams): AgentRoutingDTO
     {
         $agents = $agents->isNotEmpty() ? $agents : $this->settings->getAgents();
         $teams = $teams->isNotEmpty() ? $teams : $this->settings->getTeams();
@@ -271,9 +283,9 @@ class RoutingService
         if (count($mentionedAgents) > 1) {
             $agentList = implode(', ', array_map(fn ($t) => '@'.$t, $mentionedAgents));
 
-            return [
-                'agentId' => 'error',
-                'message' => "🚀 **Agent-to-Agent Collaboration - Coming Soon!**\n\n".
+            return new AgentRoutingDTO(
+                agentId: 'error',
+                message: "🚀 **Agent-to-Agent Collaboration - Coming Soon!**\n\n".
                     "You mentioned multiple agents: {$agentList}\n\n".
                     "Right now, I can only route to one agent at a time. But we're working on something cool:\n\n".
                     "✨ **Multi-Agent Coordination** - Agents will be able to collaborate on complex tasks!\n".
@@ -282,11 +294,14 @@ class RoutingService
                     "For now, please send separate messages to each agent:\n".
                     implode("\n", array_map(fn ($t) => "• `@{$t} [your message]`", $mentionedAgents))."\n\n".
                     '_Stay tuned for updates! 🎉_',
-            ];
+            );
         }
 
         if (! preg_match('/^@(\S+)\s+([\s\S]*)$/', $rawMessage, $match)) {
-            return ['agentId' => $defaultAgentId, 'message' => $rawMessage];
+            return new AgentRoutingDTO(
+                agentId: $defaultAgentId,
+                message: $rawMessage,
+            );
         }
 
         $candidateId = strtolower($match[1]);
@@ -294,39 +309,48 @@ class RoutingService
 
         // Check agent IDs
         if (isset($agents[$candidateId])) {
-            return ['agentId' => $candidateId, 'message' => $message];
+            return new AgentRoutingDTO(
+                agentId: $candidateId,
+                message: $message,
+            );
         }
 
         // Check team IDs — resolve to leader agent
         if (isset($teams[$candidateId])) {
-            return [
-                'agentId' => $teams[$candidateId]->leader_agent_id,
-                'message' => $message,
-                'isTeam' => true,
-                'teamId' => $candidateId,
-            ];
+            return new AgentRoutingDTO(
+                agentId: $teams[$candidateId]->leader_agent_id,
+                message: $message,
+                isTeam: true,
+                teamId: $candidateId,
+            );
         }
 
         // Match by agent name (case-insensitive)
         foreach ($agents as $id => $agent) {
             if (strtolower($agent->name) === $candidateId) {
-                return ['agentId' => $id, 'message' => $message];
+                return new AgentRoutingDTO(
+                    agentId: $id,
+                    message: $message,
+                );
             }
         }
 
         // Match by team name (case-insensitive)
         foreach ($teams as $id => $team) {
             if (strtolower($team->name) === $candidateId) {
-                return [
-                    'agentId' => $team->leader_agent_id,
-                    'message' => $message,
-                    'isTeam' => true,
-                    'teamId' => $id,
-                ];
+                return new AgentRoutingDTO(
+                    agentId: $team->leader_agent_id,
+                    message: $message,
+                    isTeam: true,
+                    teamId: $id,
+                );
             }
         }
 
-        return ['agentId' => $defaultAgentId, 'message' => $rawMessage];
+        return new AgentRoutingDTO(
+            agentId: $defaultAgentId,
+            message: $rawMessage,
+        );
     }
 
     /**
@@ -347,10 +371,10 @@ class RoutingService
     /**
      * Find an agent that has relevant skills.
      */
-    protected function findAgentForSkills(array $skillResults, AgentCollection $agents): ?string
+    protected function findAgentForSkills(SkillSearchResultDTOCollection $skillResults, AgentCollection $agents): ?string
     {
         foreach ($skillResults as $result) {
-            $skillName = $result['skill']['name'];
+            $skillName = $result->skill->name;
 
             foreach ($agents as $agentId => $agent) {
                 $agentSkills = $agent->skills ?? [];

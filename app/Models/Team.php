@@ -6,6 +6,7 @@ use App\Observers\TeamObserver;
 use App\TypedCollections\TeamCollection;
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -49,6 +50,8 @@ class Team extends Model
 
     /**
      * Get the leader agent of this team.
+     *
+     * @return BelongsTo<Agent, $this>
      */
     public function leader(): BelongsTo
     {
@@ -59,6 +62,8 @@ class Team extends Model
      * Get all agents that belong to this team via pivot table (many-to-many).
      *
      * Note: The pivot table uses agent_id/team_id strings (not model primary keys).
+     *
+     * @return BelongsToMany<Agent, $this>
      */
     public function agents(): BelongsToMany
     {
@@ -74,6 +79,8 @@ class Team extends Model
 
     /**
      * Get all conversations for this team.
+     *
+     * @return HasMany<Conversation, $this>
      */
     public function conversations(): HasMany
     {
@@ -109,7 +116,7 @@ class Team extends Model
     /**
      * Sync agents to this team (updates pivot table only).
      *
-     * @param  array  $agentIds  Array of agent_id strings (e.g., ['agent-1', 'agent-2'])
+     * @param  array<int, string>  $agentIds  Array of agent_id strings (e.g., ['agent-1', 'agent-2'])
      */
     public function syncAgents(array $agentIds): void
     {
@@ -162,6 +169,8 @@ class Team extends Model
 
     /**
      * Convert model to config array format (compatible with SettingsService).
+     *
+     * @return array<string, mixed>
      */
     public function toConfigArray(): array
     {
@@ -177,6 +186,8 @@ class Team extends Model
 
     /**
      * Create or update a team from config array.
+     *
+     * @param  array<string, mixed>  $config
      */
     public static function createFromConfig(string $teamId, array $config): self
     {
@@ -224,8 +235,11 @@ class Team extends Model
 
     /**
      * Scope for active teams.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }

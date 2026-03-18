@@ -6,6 +6,7 @@ use App\Models\ConversationMessage;
 use App\Models\Event;
 use App\Services\SettingsService;
 use Illuminate\Console\Command;
+use function Safe\shell_exec;
 
 class LaraClawVisualizerCommand extends Command
 {

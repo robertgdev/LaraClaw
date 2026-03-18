@@ -23,6 +23,8 @@ class ConversationSessionManager
     /**
      * Start a new session for a sender, deactivating all other sessions
      * for the same sender+channel combination.
+     *
+     * @param  array<string, mixed>  $data
      */
     public function startNewSession(array $data): Conversation
     {

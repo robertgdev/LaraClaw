@@ -6,6 +6,7 @@ use App\Observers\AgentObserver;
 use App\TypedCollections\AgentCollection;
 use Database\Factories\AgentFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -51,6 +52,8 @@ class Agent extends Model
 
     /**
      * Get all teams this agent belongs to via pivot table (many-to-many).
+     *
+     * @return BelongsToMany<Team, $this>
      */
     public function teams(): BelongsToMany
     {
@@ -66,6 +69,8 @@ class Agent extends Model
 
     /**
      * Get teams where this agent is the leader.
+     *
+     * @return HasMany<Team, $this>
      */
     public function ledTeams(): HasMany
     {
@@ -74,6 +79,8 @@ class Agent extends Model
 
     /**
      * Get all messages sent by this agent.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function messages(): HasMany
     {
@@ -83,6 +90,8 @@ class Agent extends Model
     /**
      * Get all messages sent by this agent (as from_agent).
      * Used for agent-to-agent messaging.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function sentMessages(): HasMany
     {
@@ -92,6 +101,8 @@ class Agent extends Model
     /**
      * Get all teams this agent belongs to (via JSON column lookup - legacy).
      * Use teams() for pivot table relationship instead.
+     *
+     * @return HasMany<Team, $this>
      */
     public function teamsViaJson(): HasMany
     {
@@ -122,6 +133,8 @@ class Agent extends Model
 
     /**
      * Create or update an agent from config array.
+     *
+     * @param  array<string, mixed>  $config
      */
     public static function createFromConfig(string $agentId, array $config): self
     {
@@ -141,16 +154,22 @@ class Agent extends Model
 
     /**
      * Scope for active agents.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
     /**
      * Scope for specific provider.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeForProvider($query, string $provider)
+    public function scopeForProvider(Builder $query, string $provider): Builder
     {
         return $query->where('provider', $provider);
     }

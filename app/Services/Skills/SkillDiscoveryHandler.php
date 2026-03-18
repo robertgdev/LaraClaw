@@ -159,7 +159,7 @@ class SkillDiscoveryHandler
         }
 
         if (! $discoveryResult->hasMatches()) {
-            MultiLogger::info("No skills found for search term: {$classification->suggestedSkillName}");
+            MultiLogger::info("No skills found for search term: {$classification->matchedSkill}");
         }
 
         return false;

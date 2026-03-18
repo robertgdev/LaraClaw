@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\DTOs\CacheStatsDTO;
+use App\DTOs\SkillClassificationResultDTO;
 use App\Logging\MultiLogger;
 use App\Models\Skill;
 use App\Models\SkillMatch;
@@ -9,6 +11,7 @@ use App\Services\Skills\ApiErrorClassifier;
 use App\Services\Skills\ClassificationMappingRepository;
 use App\Services\Skills\ClassificationPromptBuilder;
 use App\Services\Skills\ClassificationResponseParser;
+use App\TypedCollections\IntentMappingDTOCollection;
 use Prism\Prism\Facades\Prism;
 
 /**
@@ -41,6 +44,8 @@ class SkillClassificationService
 
     /**
      * Fast/cheap models for classification tasks per provider.
+     *
+     * @var array<string, string>
      */
     protected array $fastModels = [
         'groq' => 'llama-3.3-70b-versatile',
@@ -76,12 +81,11 @@ class SkillClassificationService
      * @param  bool  $clearExisting  Whether to clear existing mappings before classification
      * @param  callable|null  $progressCallback  Callback called after each skill:
      *                                           fn(string $skillName, int $mappingsCount, int $total, int $current, string $status) => void
-     * @return array{skills_processed: int, skills_skipped: int, mappings_generated: int, mappings_stored: int, errors: array}
      */
-    public function classifyAllSkills(bool $clearExisting = false, ?callable $progressCallback = null): array
+    public function classifyAllSkills(bool $clearExisting = false, ?callable $progressCallback = null): SkillClassificationResultDTO
     {
         $errors = [];
-        $allMappings = [];
+        $allMappings = new IntentMappingDTOCollection();
         $skillsDetails = [];
         $skillsProcessed = 0;
         $skillsSkipped = 0;
@@ -98,25 +102,22 @@ class SkillClassificationService
         $indexedSkills = $this->skillService->indexSkills();
         $syncStats = Skill::syncFromIndex($indexedSkills);
 
-        MultiLogger::info('Synced skills from filesystem', $syncStats);
+        MultiLogger::info('Synced skills from filesystem', $syncStats->toArray());
 
-        if (empty($indexedSkills)) {
+        if ($indexedSkills->isEmpty()) {
             MultiLogger::warning('No skills found to classify');
 
-            return [
-                'skills_processed' => 0,
-                'skills_skipped' => 0,
-                'mappings_generated' => 0,
-                'mappings_stored' => 0,
-                'errors' => ['No skills found'],
-            ];
+            return new SkillClassificationResultDTO(
+                skillsProcessed: 0,
+                skillsSkipped: 0,
+                mappingsGenerated: 0,
+                mappingsStored: 0,
+                errors: ['No skills found'],
+            );
         }
 
         // 3. Get skills that need classification
-        $skillsToClassify = Skill::active()
-            ->needsClassification()
-            ->get();
-
+        $skillsToClassify = Skill::active()->needsClassification()->get();
         $totalSkills = $skillsToClassify->count();
 
         MultiLogger::info('Starting skill classification', [
@@ -148,9 +149,9 @@ class SkillClassificationService
                 // Parse response
                 $mappings = $this->responseParser->parse($response, $skill->id);
 
-                if (! empty($mappings)) {
-                    $mappingsCount = count($mappings);
-                    $allMappings = array_merge($allMappings, $mappings);
+                if ($mappings->isNotEmpty()) {
+                    $mappingsCount = $mappings->count();
+                    $allMappings = $allMappings->merge($mappings);
                     $skillsDetails[$skill->name] = $this->promptBuilder->buildSkillDetails($mappings);
                 }
 
@@ -166,6 +167,7 @@ class SkillClassificationService
                     'skill' => $skill->name,
                     'error' => $errorMsg,
                     'error_type' => $errorType,
+                    'trace' => $e->getTrace(),
                 ]);
 
                 $skill->markFailed($errorType);
@@ -180,6 +182,7 @@ class SkillClassificationService
         }
 
         // 5. Count skipped skills (already classified with same checksum)
+        // FIXME: only skip if it actually has skills
         $skillsSkipped = Skill::active()
             ->where('classification_status', Skill::STATUS_CLASSIFIED)
             ->count();
@@ -194,14 +197,14 @@ class SkillClassificationService
             'mappings_stored' => $stored,
         ]);
 
-        return [
-            'skills_processed' => $skillsProcessed,
-            'skills_skipped' => $skillsSkipped,
-            'mappings_generated' => count($allMappings),
-            'mappings_stored' => $stored,
-            'skills_details' => $skillsDetails,
-            'errors' => $errors,
-        ];
+        return new SkillClassificationResultDTO(
+            skillsProcessed: $skillsProcessed,
+            skillsSkipped: $skillsSkipped,
+            mappingsGenerated: count($allMappings),
+            mappingsStored: $stored,
+            skillsDetails: $skillsDetails,
+            errors: $errors,
+        );
     }
 
     /**
@@ -253,9 +256,9 @@ class SkillClassificationService
      *
      * @param  string  $response  The raw LLM response
      * @param  int|null  $skillId  The skill ID to associate with mappings
-     * @return array Array of parsed mappings
+     * @return IntentMappingDTOCollection Collection of parsed mappings
      */
-    public function parseClassificationResponse(string $response, ?int $skillId = null): array
+    public function parseClassificationResponse(string $response, ?int $skillId = null): IntentMappingDTOCollection
     {
         return $this->responseParser->parse($response, $skillId);
     }
@@ -264,32 +267,30 @@ class SkillClassificationService
      * Store the parsed mappings in the database.
      * Delegates to ClassificationMappingRepository.
      *
-     * @param  array  $mappings  Array of parsed mappings
+     * @param  IntentMappingDTOCollection  $mappings  Collection of parsed mappings
      * @return int Number of mappings stored
      */
-    public function storeMappings(array $mappings): int
+    public function storeMappings(IntentMappingDTOCollection $mappings): int
     {
         return $this->mappingRepository->storeMappings($mappings);
     }
 
     /**
      * Get statistics about the current skill match cache.
-     *
-     * @return array{total_entries: int, total_hits: int, skills_covered: int}
      */
-    public function getCacheStatistics(): array
+    public function getCacheStatistics(): CacheStatsDTO
     {
         $stats = SkillMatch::getStatistics();
         $skillStats = Skill::getClassificationStats();
 
-        return [
-            'total_entries' => $stats->totalEntries,
-            'total_hits' => $stats->totalHits,
-            'skills_covered' => count($stats->topSkills),
-            'skills_pending' => $skillStats['pending'],
-            'skills_classified' => $skillStats['classified'],
-            'skills_failed' => $skillStats['failed'],
-        ];
+        return new CacheStatsDTO(
+            totalEntries: $stats->totalEntries,
+            totalHits: $stats->totalHits,
+            skillsCovered: count($stats->topSkills),
+            skillsPending: $skillStats->pending,
+            skillsClassified: $skillStats->classified,
+            skillsFailed: $skillStats->failed,
+        );
     }
 
     /**

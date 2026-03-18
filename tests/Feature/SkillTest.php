@@ -1,7 +1,9 @@
 <?php
 
+use App\DTOs\ParsedSkillDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
@@ -195,38 +197,36 @@ describe('Skill Model', function () {
         });
 
         it('can sync skills from index', function () {
-            $indexedSkills = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'dir_name' => 'imagegen',
-                    'path' => '/tmp/skills/imagegen',
-                    'directory' => '/tmp/skills/imagegen',
-                    'source_type' => 'default',
-                    'description' => 'Generate images',
-                    'keywords' => ['image', 'generate'],
-                    'has_scripts' => true,
-                    'has_references' => false,
-                    'has_assets' => false,
-                ],
-                'schedule' => [
-                    'name' => 'schedule',
-                    'dir_name' => 'schedule',
-                    'path' => '/tmp/skills/schedule',
-                    'directory' => '/tmp/skills/schedule',
-                    'source_type' => 'default',
-                    'description' => 'Schedule tasks',
-                    'keywords' => ['schedule', 'task'],
-                    'has_scripts' => true,
-                    'has_references' => true,
-                    'has_assets' => false,
-                ],
-            ];
+            $indexedSkills = new ParsedSkillDTOCollection([
+                new ParsedSkillDTO(
+                    name: 'imagegen',
+                    dirName: 'imagegen',
+                    description: 'Generate images',
+                    path: '/tmp/skills/imagegen/SKILL.md',
+                    directory: '/tmp/skills/imagegen',
+                    keywords: ['image', 'generate'],
+                    hasScripts: true,
+                    hasReferences: false,
+                    hasAssets: false,
+                ),
+                new ParsedSkillDTO(
+                    name: 'schedule',
+                    dirName: 'schedule',
+                    description: 'Schedule tasks',
+                    path: '/tmp/skills/schedule/SKILL.md',
+                    directory: '/tmp/skills/schedule',
+                    keywords: ['schedule', 'task'],
+                    hasScripts: true,
+                    hasReferences: true,
+                    hasAssets: false,
+                ),
+            ]);
 
             $stats = Skill::syncFromIndex($indexedSkills);
 
-            expect($stats['created'])->toBe(2)
-                ->and($stats['updated'])->toBe(0)
-                ->and($stats['deactivated'])->toBe(0)
+            expect($stats->created)->toBe(2)
+                ->and($stats->updated)->toBe(0)
+                ->and($stats->deactivated)->toBe(0)
                 ->and(Skill::count())->toBe(2);
         });
 
@@ -243,21 +243,23 @@ describe('Skill Model', function () {
             ]);
 
             // Sync with new skills (not including old-skill)
-            $indexedSkills = [
-                'new-skill' => [
-                    'name' => 'new-skill',
-                    'dir_name' => 'new-skill',
-                    'path' => '/tmp/skills/new-skill',
-                    'directory' => '/tmp/skills/new-skill',
-                    'source_type' => 'default',
-                    'description' => 'New skill',
-                    'keywords' => [],
-                ],
-            ];
+            $indexedSkills = new ParsedSkillDTOCollection([
+                new ParsedSkillDTO(
+                    name: 'new-skill',
+                    dirName: 'new-skill',
+                    description: 'New skill',
+                    path: '/tmp/skills/new-skill/SKILL.md',
+                    directory: '/tmp/skills/new-skill',
+                    keywords: [],
+                    hasScripts: false,
+                    hasReferences: false,
+                    hasAssets: false,
+                ),
+            ]);
 
             $stats = Skill::syncFromIndex($indexedSkills);
 
-            expect($stats['deactivated'])->toBe(1)
+            expect($stats->deactivated)->toBe(1)
                 ->and(Skill::active()->count())->toBe(1)
                 ->and(Skill::inactive()->count())->toBe(1);
         });
@@ -275,17 +277,19 @@ describe('Skill Model', function () {
             ]);
 
             // Sync with different checksum (simulating file change)
-            $indexedSkills = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'dir_name' => 'imagegen',
-                    'path' => '/tmp/skills/imagegen',
-                    'directory' => '/tmp/skills/imagegen',
-                    'source_type' => 'default',
-                    'description' => 'Generate images - updated!',
-                    'keywords' => [],
-                ],
-            ];
+            $indexedSkills = new ParsedSkillDTOCollection([
+                new ParsedSkillDTO(
+                    name: 'imagegen',
+                    dirName: 'imagegen',
+                    description: 'Generate images - updated!',
+                    path: '/tmp/skills/imagegen/SKILL.md',
+                    directory: '/tmp/skills/imagegen',
+                    keywords: [],
+                    hasScripts: false,
+                    hasReferences: false,
+                    hasAssets: false,
+                ),
+            ]);
 
             Skill::syncFromIndex($indexedSkills);
 
@@ -319,10 +323,10 @@ describe('Skill Model', function () {
 
             $stats = Skill::getClassificationStats();
 
-            expect($stats['total'])->toBe(2)
-                ->and($stats['classified'])->toBe(1)
-                ->and($stats['pending'])->toBe(1)
-                ->and($stats['total_intents'])->toBe(5);
+            expect($stats->total)->toBe(2)
+                ->and($stats->classified)->toBe(1)
+                ->and($stats->pending)->toBe(1)
+                ->and($stats->totalIntents)->toBe(5);
         });
     });
 

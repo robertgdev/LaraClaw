@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Conversation;
 
+use App\DTOs\ResponsePreparationDTO;
 use App\Logging\MultiLogger;
 use App\Models\ConversationMessage;
 use App\Models\Event;
@@ -50,12 +51,14 @@ class ResponseDeliveryService
      * Handle long responses by saving to file.
      *
      * @param  array<int, string>  $existingFiles
-     * @return array{message: string, files: array<int, string>}
      */
-    public function handleLongResponse(string $response, array $existingFiles): array
+    public function handleLongResponse(string $response, array $existingFiles): ResponsePreparationDTO
     {
         if (strlen($response) <= $this->longResponseThreshold) {
-            return ['message' => $response, 'files' => $existingFiles];
+            return new ResponsePreparationDTO(
+                message: $response,
+                files: $existingFiles,
+            );
         }
 
         // Save full response as a .md file
@@ -74,10 +77,10 @@ class ResponseDeliveryService
         // Truncate to preview
         $preview = substr($response, 0, $this->longResponseThreshold)."\n\n_(Full response attached as file)_";
 
-        return [
-            'message' => $preview,
-            'files' => array_merge($existingFiles, [$filePath]),
-        ];
+        return new ResponsePreparationDTO(
+            message: $preview,
+            files: array_merge($existingFiles, [$filePath]),
+        );
     }
 
     /**
@@ -97,7 +100,7 @@ class ResponseDeliveryService
         $sender = $agentName ?? $originalMessage->sender;
 
         ConversationMessage::createOutgoing([
-            'conversation_id' => $originalMessage->id,
+            'conversation_id' => (string) $originalMessage->id,
             'channel' => $originalMessage->channel,
             'sender' => $sender,
             'sender_id' => $originalMessage->sender_id,
@@ -126,10 +129,8 @@ class ResponseDeliveryService
 
     /**
      * Prepare a simple (non-team) response: collect files, strip tags, handle long response.
-     *
-     * @return array{message: string, files: array<int, string>}
      */
-    public function prepareSimpleResponse(string $response): array
+    public function prepareSimpleResponse(string $response): ResponsePreparationDTO
     {
         $finalResponse = trim($response);
         $outboundFiles = $this->collectFiles($finalResponse);

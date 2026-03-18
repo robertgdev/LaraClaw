@@ -24,6 +24,10 @@ Route::middleware(['rest.api.key'])->group(function (): void {
     // History
     Route::get('/history', [ChatController::class, 'history'])->name('api.history');
 
+    // Feedback
+    Route::post('/feedback/message', [ChatController::class, 'feedbackMessage'])->name('api.feedback.message');
+    Route::post('/feedback/conversation', [ChatController::class, 'feedbackConversation'])->name('api.feedback.conversation');
+
     // Send message
     Route::post('/send', [ChatController::class, 'send'])->name('api.send');
 

@@ -32,16 +32,16 @@ MD;
             $result = $this->parser->parse($tempFile);
 
             // Assert
-            expect($result)->toBeArray()
-                ->and($result['name'])->toBe('test-skill')
-                ->and($result['description'])->toBe('A test skill for unit testing')
-                ->and($result['license'])->toBe('MIT')
-                ->and($result['path'])->toBe($tempFile)
-                ->and($result['directory'])->toBe($tempDir)
-                ->and($result['keywords'])->toBeArray()
-                ->and($result['has_scripts'])->toBeFalse()
-                ->and($result['has_references'])->toBeFalse()
-                ->and($result['has_assets'])->toBeFalse();
+            expect($result)->toBeInstanceOf(\App\DTOs\ParsedSkillDTO::class)
+                ->and($result->name)->toBe('test-skill')
+                ->and($result->description)->toBe('A test skill for unit testing')
+                ->and($result->license)->toBe('MIT')
+                ->and($result->path)->toBe($tempFile)
+                ->and($result->dirName)->toBe(basename($tempDir))
+                ->and($result->keywords)->toBeArray()
+                ->and($result->hasScripts)->toBeFalse()
+                ->and($result->hasReferences)->toBeFalse()
+                ->and($result->hasAssets)->toBeFalse();
 
             // Cleanup
             File::deleteDirectory($tempDir);
@@ -109,7 +109,7 @@ MD;
 
             $result = $this->parser->parse($tempDir.'/SKILL.md');
 
-            expect($result['has_scripts'])->toBeTrue();
+            expect($result->hasScripts)->toBeTrue();
 
             File::deleteDirectory($tempDir);
         });
@@ -129,7 +129,7 @@ MD;
 
             $result = $this->parser->parse($tempDir.'/SKILL.md');
 
-            expect($result['has_references'])->toBeTrue();
+            expect($result->hasReferences)->toBeTrue();
 
             File::deleteDirectory($tempDir);
         });
@@ -149,7 +149,7 @@ MD;
 
             $result = $this->parser->parse($tempDir.'/SKILL.md');
 
-            expect($result['keywords'])->toBeArray()
+            expect($result->keywords)->toBeArray()
                 ->toContain('generate')
                 ->toContain('beautiful')
                 ->toContain('images');
@@ -172,8 +172,8 @@ MD;
 
             $result = $this->parser->parse($tempDir.'/SKILL.md');
 
-            expect($result['name'])->toBe('quoted-skill')
-                ->and($result['description'])->toBe('A quoted description');
+            expect($result->name)->toBe('quoted-skill')
+                ->and($result->description)->toBe('A quoted description');
 
             File::deleteDirectory($tempDir);
         });

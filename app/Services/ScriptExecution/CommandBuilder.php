@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\ScriptExecution;
 
+use function Safe\chmod;
+
 /**
  * Builds shell commands from script paths and arguments.
  *
@@ -16,7 +18,7 @@ class CommandBuilder
      * Build a command string from script path and arguments.
      *
      * @param  string  $scriptPath  The full path to the script
-     * @param  array  $args  Arguments to pass
+     * @param  array<int, string>  $args  Arguments to pass
      * @return string The full command string
      */
     public function build(string $scriptPath, array $args): string

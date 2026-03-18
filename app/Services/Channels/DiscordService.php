@@ -19,12 +19,14 @@ use Discord\WebSockets\Intents;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
+use function Safe\file_get_contents;
 use function Safe\preg_replace;
 
 class DiscordService implements ChannelServiceInterface
 {
     protected ?Discord $discord = null;
 
+    /** @var array<string, array{message: DiscordMessage, channel: mixed, timestamp: int, message_id: string}> */
     protected array $pendingMessages = [];
 
     protected SettingsService $settings;
@@ -306,6 +308,9 @@ class DiscordService implements ChannelServiceInterface
 
     /**
      * Send files to a channel.
+     *
+     * @param  array{message: DiscordMessage, channel: mixed, timestamp: int, message_id: string}|null  $pending
+     * @param  array<int, string>  $files
      */
     protected function sendFiles(?array $pending, array $files, ?string $senderId): void
     {
@@ -332,7 +337,8 @@ class DiscordService implements ChannelServiceInterface
         } elseif ($senderId) {
             // Send via DM using getPrivateChannel()
             $discord = $this->getDiscord();
-            $discord->users->fetch($senderId)->then(function (User $user) use ($builder) {
+            $discord->users->fetch($senderId)->then(function ($user) use ($builder) {
+                /** @var User $user */
                 $user->getPrivateChannel()->then(function ($dm) use ($builder) {
                     $dm->sendMessage($builder);
                 });
@@ -344,6 +350,9 @@ class DiscordService implements ChannelServiceInterface
 
     /**
      * Send a direct message to a user.
+     *
+     * @param  array<int, string>  $chunks
+     * @param  array<int, string>  $files
      */
     protected function sendDirectMessage(string $userId, array $chunks, array $files): void
     {
@@ -351,7 +360,8 @@ class DiscordService implements ChannelServiceInterface
 
         MultiLogger::debug("DiscordService: Starting sendDirectMessage to user {$userId}");
 
-        $discord->users->fetch($userId)->then(function (User $user) use ($chunks, $files, $userId) {
+        $discord->users->fetch($userId)->then(function ($user) use ($chunks, $files, $userId) {
+            /** @var User $user */
             MultiLogger::debug("DiscordService: Fetched user {$userId}, creating DM channel");
             $user->getPrivateChannel()->then(function ($dm) use ($chunks, $files, $userId) {
                 MultiLogger::debug("DiscordService: DM channel created for {$userId}, sending message");
@@ -384,8 +394,10 @@ class DiscordService implements ChannelServiceInterface
 
     /**
      * Download an attachment.
+     *
+     * @param  object{filename: string, url: string, content_type: string|null}  $attachment
      */
-    protected function downloadAttachment($attachment, string $messageId): ?string
+    protected function downloadAttachment(object $attachment, string $messageId): ?string
     {
         try {
             $attachmentName = $attachment->filename ?? "discord_{$messageId}_".time().'.bin';
@@ -408,6 +420,8 @@ class DiscordService implements ChannelServiceInterface
 
     /**
      * Split long messages for Discord's 2000 char limit.
+     *
+     * @return array<int, string>
      */
     protected function splitMessage(string $text, int $maxLength = 2000): array
     {

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Commands;
 
 use App\DTOs\CommandResponseDTO;
+use App\Enums\FeedbackEnum;
+use App\Models\Conversation;
+use App\Models\ConversationMessage;
 use App\Services\ConversationHistoryService;
 use Illuminate\Support\Str;
 
@@ -50,6 +53,9 @@ class JsonMessageHandler
             'session_delete' => $this->handleSessionDelete(),
             'session_pin' => $this->handleSessionPin(),
             'history_get' => $this->handleHistoryGet($data),
+            'feedback_message' => $this->handleMessageFeedback($data),
+            'feedback_conversation' => $this->handleConversationFeedback($data),
+            'subscribe' => new CommandResponseDTO(type: 'subscribed', message: 'Subscribed', success: true),
             'ping' => CommandResponseDTO::pong(),
             default => CommandResponseDTO::error("Unknown message type: {$type}", 400),
         };
@@ -57,6 +63,8 @@ class JsonMessageHandler
 
     /**
      * Handle authentication.
+     *
+     * @param  array<string, mixed>  $data
      */
     protected function handleAuth(array $data): CommandResponseDTO
     {
@@ -84,6 +92,9 @@ class JsonMessageHandler
 
     /**
      * Handle web client message send.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  callable(string $message, ?string $agentId, ?string $conversationId): CommandResponseDTO  $sendToAgent
      */
     protected function handleMessageSend(array $data, callable $sendToAgent): CommandResponseDTO
     {
@@ -184,6 +195,8 @@ class JsonMessageHandler
 
     /**
      * Handle history get request.
+     *
+     * @param  array<string, mixed>  $data
      */
     protected function handleHistoryGet(array $data): CommandResponseDTO
     {
@@ -196,6 +209,100 @@ class JsonMessageHandler
             data: [
                 'friendlyId' => $friendlyId,
                 'messages' => $history,
+            ],
+            code: 200,
+            success: true
+        );
+    }
+
+    /**
+     * Handle message feedback request.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function handleMessageFeedback(array $data): CommandResponseDTO
+    {
+        $messageId = $data['message_id'] ?? null;
+        $feedbackValue = $data['feedback'] ?? null;
+        $comment = $data['comment'] ?? null;
+
+        if (!$messageId) {
+            return CommandResponseDTO::error('Message ID is required', 400);
+        }
+
+        if ($feedbackValue === null) {
+            return CommandResponseDTO::error('Feedback value is required', 400);
+        }
+
+        // Look up by message_id (UUID) first, then by primary key
+        $message = ConversationMessage::where('message_id', $messageId)->first()
+            ?? ConversationMessage::find($messageId);
+
+        if (!$message) {
+            return CommandResponseDTO::error('Message not found', 404);
+        }
+
+        $feedback = FeedbackEnum::fromInt((int) $feedbackValue);
+        if (!$feedback) {
+            return CommandResponseDTO::error('Invalid feedback value. Must be -1, 0, or 1', 400);
+        }
+
+        $message->setFeedback($feedback, $comment);
+
+        return new CommandResponseDTO(
+            type: 'feedback_message_saved',
+            message: 'Message feedback saved',
+            data: [
+                'success' => true,
+                'message_id' => $message->message_id,
+                'feedback' => $feedback->value,
+                'feedback_label' => $feedback->label(),
+            ],
+            code: 200,
+            success: true
+        );
+    }
+
+    /**
+     * Handle conversation feedback request.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function handleConversationFeedback(array $data): CommandResponseDTO
+    {
+        $conversationId = $data['conversation_id'] ?? null;
+        $feedbackValue = $data['feedback'] ?? null;
+        $comment = $data['comment'] ?? null;
+
+        if (!$conversationId) {
+            return CommandResponseDTO::error('Conversation ID is required', 400);
+        }
+
+        if ($feedbackValue === null) {
+            return CommandResponseDTO::error('Feedback value is required', 400);
+        }
+
+        $conversation = Conversation::where('conversation_id', $conversationId)->first();
+
+        if (!$conversation) {
+            return CommandResponseDTO::error('Conversation not found', 404);
+        }
+
+        $feedback = FeedbackEnum::fromInt((int) $feedbackValue);
+        if (!$feedback) {
+            return CommandResponseDTO::error('Invalid feedback value. Must be -1, 0, or 1', 400);
+        }
+
+        $conversation->setFeedback($feedback, $comment);
+
+        return new CommandResponseDTO(
+            type: 'feedback_conversation_saved',
+            message: 'Conversation feedback saved',
+            data: [
+                'success' => true,
+                'conversation_id' => $conversationId,
+                'feedback' => $feedback->value,
+                'feedback_label' => $feedback->label(),
             ],
             code: 200,
             success: true

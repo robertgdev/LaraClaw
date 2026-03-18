@@ -1,6 +1,9 @@
 <?php
 
+use App\DTOs\IntentMappingDTO;
+use App\DTOs\SkillDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
+use App\DTOs\SkillSearchResultDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
 use App\Services\Skills\SkillMatchCache;
@@ -27,11 +30,14 @@ describe('SkillMatchCache', function () {
                 'keywords' => ['test', 'skill'],
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new IntentMappingDTO(
+                sampleIntent: 'Test query',
                 keywords: ['test', 'query'],
                 skillId: $skill->id,
                 confidence: 0.9,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             $result = $this->cache->findMatch(['test', 'query']);
 
@@ -50,11 +56,14 @@ describe('SkillMatchCache', function () {
                 'keywords' => ['low'],
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new IntentMappingDTO(
+                sampleIntent: 'Unrelated',
                 keywords: ['unrelated'],
                 skillId: $skill->id,
                 confidence: 0.3,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             $result = $this->cache->findMatch(['completely', 'different']);
 
@@ -74,9 +83,29 @@ describe('SkillMatchCache', function () {
                 'keywords' => ['store'],
             ]);
 
+            $skillDTO = new SkillDTO(
+                name: 'storable-skill',
+                dirName: 'storable-skill',
+                description: 'A storable skill',
+                path: '/tmp/skills/storable-skill',
+                directory: '/tmp/skills/storable-skill',
+                keywords: ['store'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+                license: null,
+                sourceType: 'core',
+            );
+
+            $searchResult = new SkillSearchResultDTO(
+                skill: $skillDTO,
+                score: 10,
+                matchedKeywords: ['store'],
+            );
+
             $this->cache->store(
                 ['store', 'test'],
-                ['skill' => ['name' => 'storable-skill'], 'score' => 10, 'matched_keywords' => ['store']],
+                $searchResult,
                 'Store a test message',
                 ['intent' => 'automation']
             );
@@ -89,22 +118,28 @@ describe('SkillMatchCache', function () {
         it('skips store when keywords are empty', function () {
             $countBefore = SkillMatch::count();
 
-            $this->cache->store(
-                [],
-                ['skill' => ['name' => 'whatever'], 'score' => 5],
-                'empty keywords'
+            $skillDTO = new SkillDTO(
+                name: 'whatever',
+                dirName: 'whatever',
+                description: 'Whatever',
+                path: '/tmp/whatever',
+                directory: '/tmp/whatever',
+                keywords: [],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
             );
 
-            expect(SkillMatch::count())->toBe($countBefore);
-        });
-
-        it('skips store when skill is empty', function () {
-            $countBefore = SkillMatch::count();
+            $searchResult = new SkillSearchResultDTO(
+                skill: $skillDTO,
+                score: 5,
+                matchedKeywords: [],
+            );
 
             $this->cache->store(
-                ['some', 'keywords'],
-                ['skill' => null, 'score' => 5],
-                'null skill'
+                [],
+                $searchResult,
+                'empty keywords'
             );
 
             expect(SkillMatch::count())->toBe($countBefore);
@@ -126,21 +161,25 @@ describe('SkillMatchCache', function () {
                 'has_assets' => false,
             ]);
 
-            $match = SkillMatch::storeMatch(
+            $mapping = new IntentMappingDTO(
+                sampleIntent: 'Cached query',
                 keywords: ['cached', 'query'],
                 skillId: $skill->id,
                 confidence: 0.85,
+                category: 'test',
             );
+            $match = SkillMatch::storeMatch($mapping);
 
             $match->refresh();
             $initialHits = $match->hit_count;
 
             $result = $this->cache->buildCacheHitResult($match, ['cached', 'query']);
 
-            expect($result)->toHaveCount(1)
-                ->and($result[0]['from_cache'])->toBeTrue()
-                ->and($result[0]['skill']['name'])->toBe('cache-hit-skill')
-                ->and($result[0]['score'])->toBe(8.5); // 0.85 * 10
+            expect($result)->toHaveCount(1);
+            $firstResult = $result->first();
+            expect($firstResult->fromCache)->toBeTrue()
+                ->and($firstResult->skill->name)->toBe('cache-hit-skill')
+                ->and($firstResult->score)->toBe(8); // 0.85 * 10, rounded to int
 
             $match->refresh();
             expect($match->hit_count)->toBeGreaterThan($initialHits);
@@ -167,8 +206,22 @@ describe('SkillMatchCache', function () {
                 'checksum' => 'mno345',
             ]);
 
-            SkillMatch::storeMatch(keywords: ['a'], skillId: $skill->id, confidence: 0.9);
-            SkillMatch::storeMatch(keywords: ['b'], skillId: $skill->id, confidence: 0.8);
+            $mapping1 = new IntentMappingDTO(
+                sampleIntent: 'A query',
+                keywords: ['a'],
+                skillId: $skill->id,
+                confidence: 0.9,
+                category: 'test',
+            );
+            $mapping2 = new IntentMappingDTO(
+                sampleIntent: 'B query',
+                keywords: ['b'],
+                skillId: $skill->id,
+                confidence: 0.8,
+                category: 'test',
+            );
+            SkillMatch::storeMatch($mapping1);
+            SkillMatch::storeMatch($mapping2);
 
             expect(SkillMatch::count())->toBe(2);
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\AgentRoutingDTO;
 use App\DTOs\RoutingResultDTO;
 use App\Models\Agent;
 use App\Models\Team;
@@ -236,7 +237,7 @@ describe('RoutingService', function () {
 
             // Assert
             expect($result)->toHaveCount(1)
-                ->and($result[0]['teammateId'])->toBe('agent-2');
+                ->and($result[0]->teammateId)->toBe('agent-2');
         });
 
         it('extracts multiple teammate mentions', function () {
@@ -408,8 +409,9 @@ describe('RoutingService', function () {
             $result = $this->routingService->parseAgentRouting($message, $agents, $teams);
 
             // Assert
-            expect($result['agentId'])->toBe('agent-1')
-                ->and($result['message'])->toBe('Hello there');
+            expect($result)->toBeInstanceOf(AgentRoutingDTO::class)
+                ->and($result->agentId)->toBe('agent-1')
+                ->and($result->message)->toBe('Hello there');
         });
 
         it('parses team routing', function () {
@@ -430,9 +432,10 @@ describe('RoutingService', function () {
             $result = $this->routingService->parseAgentRouting($message, $agents, $teams);
 
             // Assert
-            expect($result['agentId'])->toBe('leader-agent')
-                ->and($result['isTeam'])->toBeTrue()
-                ->and($result['teamId'])->toBe('team-1');
+            expect($result)->toBeInstanceOf(AgentRoutingDTO::class)
+                ->and($result->agentId)->toBe('leader-agent')
+                ->and($result->isTeam)->toBeTrue()
+                ->and($result->teamId)->toBe('team-1');
         });
 
         it('returns default for no explicit routing', function () {
@@ -449,8 +452,9 @@ describe('RoutingService', function () {
             $result = $this->routingService->parseAgentRouting($message, $agents, $teams);
 
             // Assert
-            expect($result['agentId'])->toBe('default')
-                ->and($result['message'])->toBe('Hello there');
+            expect($result)->toBeInstanceOf(AgentRoutingDTO::class)
+                ->and($result->agentId)->toBe('default')
+                ->and($result->message)->toBe('Hello there');
         });
 
         it('matches agent by name', function () {
@@ -466,7 +470,8 @@ describe('RoutingService', function () {
             $result = $this->routingService->parseAgentRouting($message, $agents, $teams);
 
             // Assert
-            expect($result['agentId'])->toBe('agent-1');
+            expect($result)->toBeInstanceOf(AgentRoutingDTO::class)
+                ->and($result->agentId)->toBe('agent-1');
         });
     });
 

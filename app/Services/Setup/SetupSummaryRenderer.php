@@ -21,7 +21,7 @@ class SetupSummaryRenderer
      * Display configuration summary.
      *
      * @param  Command  $command  The command instance for output
-     * @param  array  $config  The collected configuration
+     * @param  array<string, mixed>  $config  The collected configuration
      * @param  array<string, array{display: string}>  $channels  Channel registry
      * @param  array<string, array{display: string}>  $providers  Provider registry
      */
@@ -70,6 +70,7 @@ class SetupSummaryRenderer
     /**
      * Display .env changes preview and confirm.
      *
+     * @param  array<string, string>  $envChanges
      * @return bool True if user confirmed, false if cancelled
      */
     public function displayEnvChangesAndConfirm(Command $command, array $envChanges): bool
@@ -95,6 +96,8 @@ class SetupSummaryRenderer
 
     /**
      * Display completion message.
+     *
+     * @param  array<string, mixed>  $config
      */
     public function displayCompletion(Command $command, array $config): void
     {
@@ -107,6 +110,8 @@ class SetupSummaryRenderer
 
     /**
      * Display generated API keys.
+     *
+     * @param  array<string, mixed>  $config
      */
     public function displayApiKeys(Command $command, array $config): void
     {

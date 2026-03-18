@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\ChannelEnum;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
+use App\Models\Team;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
@@ -23,6 +24,8 @@ class ConversationHistoryService
 
     protected bool $exportToFiles;
 
+    protected ?MemoryEngineService $memoryService = null;
+
     public function __construct(SettingsService $settings)
     {
         $this->settings = $settings;
@@ -31,14 +34,24 @@ class ConversationHistoryService
     }
 
     /**
+     * Set the memory service for lossless context tracking.
+     */
+    public function setMemoryService(MemoryEngineService $memoryService): self
+    {
+        $this->memoryService = $memoryService;
+
+        return $this;
+    }
+
+    /**
      * Save a conversation to the database.
      *
      * @param  string  $channel  The channel (telegram, discord, whatsapp, cli)
      * @param  string  $sender  The sender name
      * @param  string  $userMessage  The original user message
-     * @param  array  $responses  Array of [agentId, agentName, response] tuples
+     * @param  array<int, array{agentId: string, agentName: string, response: string, provider?: string|null, model?: string|null}>  $responses  Array of response data
      * @param  string|null  $teamId  Optional team ID for team conversations
-     * @param  array  $files  Optional array of file paths
+     * @param  array<int, string>  $files  Optional array of file paths
      * @param  string|null  $senderId  Optional sender ID for episodic memory tracking
      * @return string The conversation ID
      */
@@ -52,9 +65,7 @@ class ConversationHistoryService
         ?string $senderId = null
     ): string {
         // Convert channel string to enum if needed
-        $channelEnum = $channel instanceof ChannelEnum
-            ? $channel
-            : ChannelEnum::tryFrom(strtolower($channel));
+        $channelEnum = ChannelEnum::tryFrom(strtolower($channel));
 
         // Generate sender_id if not provided
         if ($senderId === null) {
@@ -69,22 +80,30 @@ class ConversationHistoryService
             'team_id' => $teamId,
         ]);
 
+        // Collect message IDs for lossless context
+        $messageIds = [];
+
         // Add user message with sender_id
-        $conversation->addUserMessage($userMessage, $sender, $senderId, $files);
+        $userMsg = $conversation->addUserMessage($userMessage, $sender, $senderId, $files);
+        $messageIds[] = $userMsg->id;
 
         // Add each agent response
         foreach ($responses as $response) {
-            $conversation->addAgentResponse(
+            $agentMsg = $conversation->addAgentResponse(
                 $response['agentId'] ?? 'unknown',
                 $response['agentName'] ?? 'Agent',
                 $response['response'] ?? '',
                 $response['provider'] ?? null,
                 $response['model'] ?? null
             );
+            $messageIds[] = $agentMsg->id;
         }
 
         // Mark conversation as completed
         $conversation->markCompleted();
+
+        // Append to lossless context if enabled
+        $this->appendToLosslessContext($conversation->id, $messageIds);
 
         // Optionally export to file for backup
         if ($this->exportToFiles) {
@@ -95,7 +114,29 @@ class ConversationHistoryService
     }
 
     /**
+     * Append messages to lossless context if enabled.
+     *
+     * @param  int  $conversationId  The conversation ID (primary key)
+     * @param  array<int>  $messageIds  Array of message IDs to append
+     */
+    protected function appendToLosslessContext(int $conversationId, array $messageIds): void
+    {
+        if ($this->memoryService === null) {
+            return;
+        }
+
+        if (! $this->memoryService->isLosslessEnabled()) {
+            return;
+        }
+
+        // Append all messages to the context
+        $this->memoryService->appendMessagesToContext($conversationId, $messageIds);
+    }
+
+    /**
      * Save a single-agent conversation.
+     *
+     * @param  array<int, string>  $files
      */
     public function saveSingleAgentConversation(
         string $channel,
@@ -122,6 +163,9 @@ class ConversationHistoryService
 
     /**
      * Save a team conversation.
+     *
+     * @param  array<int, array{agentId: string, agentName: string, response: string, provider?: string|null, model?: string|null}>  $responses
+     * @param  array<int, string>  $files
      */
     public function saveTeamConversation(
         string $channel,
@@ -149,14 +193,15 @@ class ConversationHistoryService
     protected function exportToFile(Conversation $conversation): string
     {
         // Load messages if not already loaded
-        $conversation->load('messages');
+        $conversation->load(['messages', 'team']);
 
         $lines = [];
 
         // Header - use relationship to get team
         if ($conversation->team_id) {
+            /** @var Team|null $team */
             $team = $conversation->team;
-            $teamName = $team?->name ?? $conversation->team_id;
+            $teamName = $team !== null ? $team->name : $conversation->team_id;
             $lines[] = "# Team Conversation: {$teamName} (@{$conversation->team_id})";
         } else {
             $lines[] = '# Conversation';
@@ -170,6 +215,7 @@ class ConversationHistoryService
         $lines[] = '';
 
         // Add all messages
+        /** @var ConversationMessage $message */
         foreach ($conversation->messages as $message) {
             if ($message->isIncoming()) {
                 $lines[] = '## User Message';
@@ -222,7 +268,7 @@ class ConversationHistoryService
      *
      * @param  int  $limit  Maximum number of conversations to return
      * @param  string|null  $teamId  Optional team ID to filter by
-     * @return array Array of conversation data
+     * @return array<int, array{id: int, conversation_id: string, channel: string, sender: string, title: string, preview: string, date: string, team_id: string|null, total_messages: int}>
      */
     public function getRecentHistory(int $limit = 10, ?string $teamId = null): array
     {
@@ -235,18 +281,20 @@ class ConversationHistoryService
             $query->where('team_id', $teamId);
         }
 
-        return $query->get()
-            ->map(fn ($conv) => [
-                'id' => $conv->id,
-                'conversation_id' => $conv->conversation_id,
-                'channel' => $conv->channel->value,
-                'sender' => $conv->sender,
-                'title' => $this->generateTitle($conv),
-                'preview' => Str::limit($conv->getFirstUserMessage()?->message ?? '', 200),
-                'date' => $conv->created_at->toDateTimeString(),
-                'team_id' => $conv->team_id,
-                'total_messages' => $conv->total_messages,
-            ])
+        /** @var \Illuminate\Database\Eloquent\Collection<int, Conversation> $conversations */
+        $conversations = $query->get();
+
+        return $conversations->map(fn (Conversation $conv) => [
+            'id' => $conv->id,
+            'conversation_id' => $conv->conversation_id,
+            'channel' => $conv->channel->value,
+            'sender' => $conv->sender,
+            'title' => $this->generateTitle($conv),
+            'preview' => Str::limit($conv->getFirstUserMessage()->message ?? '', 200),
+            'date' => $conv->created_at->toDateTimeString(),
+            'team_id' => $conv->team_id,
+            'total_messages' => $conv->total_messages,
+        ])
             ->toArray();
     }
 
@@ -256,8 +304,10 @@ class ConversationHistoryService
     protected function generateTitle(Conversation $conversation): string
     {
         if ($conversation->team_id) {
+            $conversation->load('team');
+            /** @var Team|null $team */
             $team = $conversation->team;
-            $teamName = $team?->name ?? $conversation->team_id;
+            $teamName = $team !== null ? $team->name : $conversation->team_id;
 
             return "Team Conversation: {$teamName}";
         }
@@ -271,7 +321,7 @@ class ConversationHistoryService
      * @param  string  $query  Search query
      * @param  int  $limit  Maximum results
      * @param  string|null  $teamId  Optional team filter
-     * @return array Array of matching conversations
+     * @return array<int, array{id: int, conversation_id: string, channel: string, sender: string, preview: string, date: string, team_id: string|null}>
      */
     public function search(string $query, int $limit = 20, ?string $teamId = null): array
     {
@@ -279,14 +329,15 @@ class ConversationHistoryService
 
         // Scout Builder returns results via get(), same as Eloquent Builder
         // But we need to handle the pagination differently for Scout
+        /** @var \Illuminate\Database\Eloquent\Collection<int, Conversation> $results */
         $results = $searchQuery->get();
 
-        return $results->map(fn ($conv) => [
+        return $results->map(fn (Conversation $conv) => [
             'id' => $conv->id,
             'conversation_id' => $conv->conversation_id,
             'channel' => $conv->channel->value,
             'sender' => $conv->sender,
-            'preview' => Str::limit($conv->getFirstUserMessage()?->message ?? '', 200),
+            'preview' => Str::limit($conv->getFirstUserMessage()->message ?? '', 200),
             'date' => $conv->created_at->toDateTimeString(),
             'team_id' => $conv->team_id,
         ])
@@ -295,6 +346,8 @@ class ConversationHistoryService
 
     /**
      * Get a specific conversation by ID.
+     *
+     * @return array{id: int, conversation_id: string, channel: string, sender: string, sender_id: string|null, user_message: string|null, responses: array<int, array{agentId: string|null, agentName: string, provider: string|null, model: string|null, response: string}>, team_id: string|null, files: array<int, string>, total_messages: int, started_at: string|null, completed_at: string|null, created_at: string}|null
      */
     public function getConversation(string $conversationId): ?array
     {
@@ -307,7 +360,9 @@ class ConversationHistoryService
         }
 
         // Build responses array from outgoing messages
-        $responses = $conversation->outgoingMessages->map(fn ($msg) => [
+        /** @var \Illuminate\Database\Eloquent\Collection<int, ConversationMessage> $outgoingMessages */
+        $outgoingMessages = $conversation->outgoingMessages;
+        $responses = $outgoingMessages->map(fn (ConversationMessage $msg) => [
             'agentId' => $msg->agent_id,
             'agentName' => $msg->sender,
             'provider' => $msg->provider,
@@ -324,10 +379,10 @@ class ConversationHistoryService
             'channel' => $conversation->channel->value,
             'sender' => $conversation->sender,
             'sender_id' => $conversation->sender_id,
-            'user_message' => $firstMessage?->message,
+            'user_message' => $firstMessage !== null ? $firstMessage->message : null,
             'responses' => $responses,
             'team_id' => $conversation->team_id,
-            'files' => $firstMessage?->files ?? [],
+            'files' => $firstMessage !== null ? ($firstMessage->files ?? []) : [],
             'total_messages' => $conversation->total_messages,
             'started_at' => $conversation->started_at?->toDateTimeString(),
             'completed_at' => $conversation->completed_at?->toDateTimeString(),
@@ -354,6 +409,8 @@ class ConversationHistoryService
 
     /**
      * Get conversation statistics.
+     *
+     * @return array{total_conversations: int, total_messages: int, by_channel: array<string, int>, by_team: array<string, int>, recent_24h: int, recent_7d: int, recent_30d: int}
      */
     public function getStatistics(): array
     {
@@ -387,7 +444,7 @@ class ConversationHistoryService
      * Get all chat history files (for backward compatibility).
      *
      * @param  string|null  $teamId  Optional team ID to filter by
-     * @return array Array of file paths
+     * @return array<int, string> Array of file paths
      */
     public function getHistoryFiles(?string $teamId = null): array
     {
@@ -417,7 +474,6 @@ class ConversationHistoryService
             ChannelEnum::WHATSAPP => 'whatsapp',
             ChannelEnum::CLI => 'cli',
             ChannelEnum::WEBSOCKET => 'ws',
-            default => 'unknown',
         };
 
         return "{$prefix}_".substr(md5($sender.time()), 0, 8);

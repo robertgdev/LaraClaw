@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\SkillSyncResultDTO;
 use App\Logging\MultiLogger;
 use App\Models\Skill;
+use App\TypedCollections\ParsedSkillDTOCollection;
 
 /**
  * Syncs skills from the filesystem index to the database.
@@ -23,38 +25,34 @@ class SkillSyncService
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array  $indexedSkills  Skills from SkillSearchService::indexSkills()
-     * @return array{created: int, updated: int, deactivated: int}
+     * @param  ParsedSkillDTOCollection  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
-    public function syncFromIndex(array $indexedSkills): array
+    public function syncFromIndex(ParsedSkillDTOCollection $indexedSkills): SkillSyncResultDTO
     {
-        $stats = [
-            'created' => 0,
-            'updated' => 0,
-            'deactivated' => 0,
-        ];
+        $created = 0;
+        $updated = 0;
 
         $seenNames = [];
-        foreach ($indexedSkills as $skillName => $skillData) {
-            $seenNames[] = $skillName;
-            $checksum = $this->checksumCalculator->calculate($skillData['directory']);
+        foreach ($indexedSkills as $skillData) {
+            $seenNames[] = $skillData->name;
+            $checksum = $this->checksumCalculator->calculate($skillData->directory);
 
             // Base attributes
             $attributes = [
-                'dir_name' => $skillData['dir_name'],
-                'path' => $skillData['path'],
-                'description' => $skillData['description'],
-                'license' => $skillData['license'] ?? null,
-                'keywords' => $skillData['keywords'] ?? [],
+                'dir_name' => $skillData->dirName,
+                'path' => $skillData->path,
+                'description' => $skillData->description,
+                'license' => $skillData->license,
+                'keywords' => $skillData->keywords,
                 'checksum' => $checksum,
-                'has_scripts' => $skillData['has_scripts'] ?? false,
-                'has_references' => $skillData['has_references'] ?? false,
-                'has_assets' => $skillData['has_assets'] ?? false,
+                'has_scripts' => $skillData->hasScripts,
+                'has_references' => $skillData->hasReferences,
+                'has_assets' => $skillData->hasAssets,
                 'is_active' => true,
             ];
 
             // Check existing skill before updating to preserve classification state
-            $existing = Skill::where('name', $skillName)->first();
+            $existing = Skill::where('name', $skillData->name)->first();
             $isNew = $existing === null;
             $checksumChanged = $existing !== null && $existing->checksum !== $checksum;
 
@@ -64,15 +62,15 @@ class SkillSyncService
             }
 
             $skill = Skill::updateOrCreate(
-                ['name' => $skillName],
+                ['name' => $skillData->name],
                 $attributes
             );
 
             // Stats
             if ($skill->wasRecentlyCreated) {
-                $stats['created']++;
+                $created++;
             } else {
-                $stats['updated']++;
+                $updated++;
             }
         }
 
@@ -81,10 +79,16 @@ class SkillSyncService
             ->where('is_active', true)
             ->update(['is_active' => false]);
 
-        $stats['deactivated'] = $deactivated;
+        MultiLogger::info('Synced skills from index', [
+            'created' => $created,
+            'updated' => $updated,
+            'deactivated' => $deactivated,
+        ]);
 
-        MultiLogger::info('Synced skills from index', $stats);
-
-        return $stats;
+        return new SkillSyncResultDTO(
+            created: $created,
+            updated: $updated,
+            deactivated: $deactivated,
+        );
     }
 }

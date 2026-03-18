@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pipeline\Stages;
 
+use App\Jobs\LosslessCompactionJob;
 use App\Models\Conversation;
 use App\Models\Event;
 use App\Services\AgentInvokerService;
@@ -27,7 +28,7 @@ use Illuminate\Support\Str;
  * 2. Appends pending indicators for internal team messages
  * 3. Gets or creates the active session
  * 4. Invokes the agent (or uses direct execution result)
- * 5. Records episodic memory for external messages
+ * 5. Appends message to lossless context if enabled
  */
 class AgentInvocationStage implements MessagePipelineStage
 {
@@ -86,6 +87,15 @@ class AgentInvocationStage implements MessagePipelineStage
         // Session management
         $context->session = $this->getOrCreateSession($context);
 
+        // DEBUG: Log session creation
+        /*
+        \App\Logging\MultiLogger::info('[DEBUG] AgentInvocationStage: session set', [
+            'session_id' => $context->session?->id,
+            'session_conversation_id' => $context->session?->conversation_id,
+            'message_conversation_id' => $context->message->conversation_id,
+        ]);
+        */
+
         // Update session metadata
         $firstMessage = $context->session->getFirstUserMessage();
         $updateData = ['last_message_at' => now()];
@@ -94,16 +104,14 @@ class AgentInvocationStage implements MessagePipelineStage
         }
         $context->session->update($updateData);
 
+        // Append message to lossless context if enabled
+        $this->appendToLosslessContext($context);
+
         // Generate response
         if ($context->directExecutionResult !== null) {
             $context->response = $context->directExecutionResult;
         } else {
             $context->response = $this->invokeAgent($context);
-        }
-
-        // Record episodic memory
-        if (! $context->isInternal) {
-            $this->recordEpisodicEvent($context);
         }
 
         return $context;
@@ -140,6 +148,11 @@ class AgentInvocationStage implements MessagePipelineStage
         $this->invokerService->setChannel($context->message->channel);
         $this->invokerService->setSenderId($context->message->sender_id ?? $context->message->sender);
 
+        // Pass conversation ID for lossless memory context
+        if ($context->session) {
+            $this->invokerService->setConversationId($context->session->id);
+        }
+
         $responseParser = new ResponseParserService($this->scriptExecutionService);
         $this->invokerService->setResponseParser($responseParser);
 
@@ -169,34 +182,54 @@ class AgentInvocationStage implements MessagePipelineStage
     }
 
     /**
-     * Record an episodic memory event (fire-and-forget).
+     * Append the message to the lossless context if enabled.
+     * Also checks if compaction is needed and dispatches a background job.
      */
-    protected function recordEpisodicEvent(MessageProcessingContext $context): void
+    protected function appendToLosslessContext(MessageProcessingContext $context): void
     {
-        if (! $this->memoryService->isEnabled()) {
+        if (! $this->memoryService->isLosslessEnabled()) {
             return;
         }
 
-        $content = $this->memoryService->truncateText('User: '.$context->processedMessage);
-        $outcome = $this->memoryService->truncateText($context->response);
-
-        // If truncation returns null, memory is disabled
-        if ($content === null || $outcome === null) {
+        if (! $context->session) {
             return;
         }
 
         try {
-            $this->memoryService->recordEvent(
-                $context->message->sender_id ?? $context->message->sender,
-                $context->message->channel,
-                [
-                    'type' => 'task_completed',
-                    'content' => $content,
-                    'outcome' => $outcome,
-                ]
+            $this->memoryService->appendMessageToContext(
+                $context->session->id,
+                $context->message->id
             );
+
+            // Check if compaction is needed and dispatch background job
+            $this->dispatchCompactionIfNeeded($context->session->id);
         } catch (\Exception $e) {
-            \App\Logging\MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
+            \App\Logging\MultiLogger::warning("Failed to append to lossless context: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Check if compaction is needed and dispatch a background job.
+     */
+    protected function dispatchCompactionIfNeeded(int $conversationId): void
+    {
+        try {
+            $tokenBudget = (int) config('laraclaw.memory.lossless_token_budget', 100000);
+            $decision = $this->memoryService->evaluateCompaction($conversationId, $tokenBudget);
+
+            if ($decision->shouldCompact) {
+                // Dispatch to 'compaction' queue for isolation from message processing
+                LosslessCompactionJob::dispatch($conversationId)
+                    ->onQueue('compaction');
+
+                \App\Logging\MultiLogger::info('Lossless compaction job dispatched', [
+                    'conversation_id' => $conversationId,
+                    'current_tokens' => $decision->currentTokens,
+                    'threshold' => $decision->threshold,
+                ]);
+            }
+        } catch (\Exception $e) {
+            \App\Logging\MultiLogger::warning("Failed to evaluate/dispatch compaction: {$e->getMessage()}");
         }
     }
 }

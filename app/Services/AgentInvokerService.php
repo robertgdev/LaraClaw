@@ -29,6 +29,8 @@ class AgentInvokerService
 
     protected ?string $senderId = null;
 
+    protected ?int $conversationId = null;
+
     public function __construct(
         RoutingService $routingService,
         SettingsService $settings,
@@ -100,6 +102,16 @@ class AgentInvokerService
     }
 
     /**
+     * Set the conversation ID for lossless memory context.
+     */
+    public function setConversationId(int $conversationId): self
+    {
+        $this->conversationId = $conversationId;
+
+        return $this;
+    }
+
+    /**
      * Invoke a single agent with a message using Prism PHP.
      */
     public function invokeAgent(
@@ -143,6 +155,7 @@ class AgentInvokerService
             'sender_id' => $this->senderId,
             'channel' => $this->channel,
             'message' => $message,
+            'conversation_id' => $this->conversationId,
         ]);
 
         if (! empty($systemPrompt)) {
@@ -161,7 +174,7 @@ class AgentInvokerService
             // Parse response and execute any scripts if ResponseParser is available
             if ($this->responseParser !== null) {
                 MultiLogger::debug('AgentInvokerService: Calling ResponseParser');
-                $parsed = $this->responseParser->parseAndExecute($response, $agentId);
+                $parsed = $this->responseParser->parseAndExecute($response);
 
                 // If scripts were executed, log and return modified response
                 if ($parsed->hasExecutions()) {

@@ -1,8 +1,16 @@
-# Memory System Documentation
+# Lossless Memory System
 
 ## Overview
 
-LaraClaw implements a sophisticated **3-layer adaptive memory system** inspired by cognitive science and the Ebbinghaus forgetting curve. This system enables agents to remember user preferences, past interactions, and important context across conversations.
+LaraClaw implements a **lossless memory compaction system** designed to manage conversation context within token budgets while preserving the ability to reconstruct original content. The system uses hierarchical summarization with a directed acyclic graph (DAG) structure, ensuring no information is permanently lost during compaction.
+
+## Goals
+
+1. **Token Budget Management**: Keep conversation context within configurable token limits
+2. **Lossless Compaction**: Summaries maintain links to source messages, enabling full reconstruction
+3. **Fresh Tail Protection**: Recent messages are preserved in their original form
+4. **Hierarchical Summaries**: Multi-depth summarization allows efficient compression at scale
+5. **Integrity Validation**: Built-in checks ensure data consistency and referential integrity
 
 ## Architecture
 
@@ -11,434 +19,447 @@ LaraClaw implements a sophisticated **3-layer adaptive memory system** inspired 
 │                          MemoryEngineService                                 │
 │                         (Facade / Entry Point)                               │
 └─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-          ┌───────────────────────────┼───────────────────────────┐
-          ▼                           ▼                           ▼
+                                       │
+           ┌───────────────────────────┼───────────────────────────┐
+           ▼                           ▼                           ▼
 ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-│     Layer 1         │   │     Layer 2         │   │     Layer 3         │
-│  Episodic Memory    │   │   Semantic Index    │   │  Temporal Decay     │
+│     SummaryStore    │   │   CompactionEngine  │   │   IntegrityChecker  │
 │                     │   │                     │   │                     │
-│ • Timestamped       │   │ • Full-text Search  │   │ • Ebbinghaus        │
-│   events            │──▶│ • BM25 Ranking      │──▶│   Forgetting Curve  │
-│ • Outcomes          │   │ • Scout Integration │   │ • Access Frequency  │
-│ • Importance        │   │                     │   │   Strengthening     │
+│ • Context items     │   │ • Leaf passes       │   │ • Contiguity check  │
+│ • Summary records   │   │ • Condensed passes  │   │ • Reference check   │
+│ • Message linking   │   │ • Fresh tail        │   │ • Lineage check     │
+│ • Parent linking    │   │ • Escalation        │   │ • Token consistency │
 └─────────────────────┘   └─────────────────────┘   └─────────────────────┘
-          │                           │                           │
-          └───────────────────────────┼───────────────────────────┘
-                                      ▼
-                    ┌─────────────────────────────────┐
-                    │      MemoryConsolidator         │
-                    │   (Scheduled Maintenance)       │
-                    │                                 │
-                    │  • Decay importance             │
-                    │  • Prune low-value memories     │
-                    │  • Merge duplicates             │
-                    └─────────────────────────────────┘
+           │                           │                           │
+           └───────────────────────────┼───────────────────────────┘
+                                       ▼
+                     ┌─────────────────────────────────┐
+                     │       Database Tables           │
+                     │                                 │
+                     │  • memory_context_items         │
+                     │  • memory_summaries             │
+                     │  • memory_summary_messages      │
+                     │  • memory_summary_parents       │
+                     └─────────────────────────────────┘
 ```
 
 ## Components
 
-### 1. EpisodicMemory Model
+### 1. MemoryContextItem Model
 
-The primary storage for timestamped events with outcomes and importance scoring.
+Represents an ordered list of items forming the conversation context. Each item is either a raw message or a summary.
 
-**Database Table:** `memories`
+**Database Table:** `memory_context_items`
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | UUID | Unique identifier |
-| `sender_id` | string | User identifier (channel-specific) |
-| `channel` | enum | Communication channel (discord, telegram, etc.) |
-| `agent_id` | string | Optional agent context |
-| `event_type` | enum | Type of memory event |
-| `content` | text | The memory content |
-| `outcome` | text | Optional outcome/result |
-| `importance` | decimal(3,2) | Importance score (0.0-1.0) |
-| `access_count` | int | Number of times accessed |
-| `last_accessed_at` | timestamp | Last access timestamp |
+| `conversation_id` | int | FK to conversations.id |
+| `ordinal` | int | Position in context (0-based, contiguous) |
+| `item_type` | string | `'message'` or `'summary'` |
+| `message_id` | int? | FK to conversation_messages.id (if message type) |
+| `summary_id` | string? | FK to memory_summaries.summary_id (if summary type) |
 | `created_at` | timestamp | Creation timestamp |
 
-### 2. Event Types
+**Key Methods:**
+- [`isMessage()`](../app/Models/MemoryContextItem.php:139): Check if item is a message
+- [`isSummary()`](../app/Models/MemoryContextItem.php:147): Check if item is a summary
+- [`getTokenCount()`](../app/Models/MemoryContextItem.php:155): Get token count for this item
 
-Defined in [`EpisodicEventTypeEnum`](../app/Enums/EpisodicEventTypeEnum.php):
+### 2. MemorySummary Model
 
-| Event Type | Default Importance | Description |
-|------------|-------------------|-------------|
-| `CORRECTION` | 0.90 | User corrected agent behavior |
-| `PREFERENCE_LEARNED` | 0.80 | Learned user preference |
-| `FACT_STORED` | 0.60 | General fact about user |
-| `TASK_COMPLETED` | 0.50 | Successfully completed task |
-| `DELEGATION_RESULT` | 0.50 | Result of agent delegation |
+Stores hierarchical conversation summaries with full lineage tracking.
 
-### 3. MemoryRelevanceScorer
+**Database Table:** `memory_summaries`
 
-Implements hybrid scoring combining three signals:
+| Column | Type | Description |
+|--------|------|-------------|
+| `summary_id` | string | Primary key (e.g., `sum_abc123...`) |
+| `conversation_id` | int | FK to conversations.id |
+| `kind` | string | `'leaf'` or `'condensed'` |
+| `depth` | int | Summary depth (0 = leaf, 1+ = condensed) |
+| `content` | text | Summary text content |
+| `token_count` | int | Approximate token count |
+| `earliest_at` | timestamp? | Earliest timestamp of source content |
+| `latest_at` | timestamp? | Latest timestamp of source content |
+| `descendant_count` | int | Number of descendant summaries |
+| `descendant_token_count` | int | Total tokens in descendants |
+| `source_message_token_count` | int | Original message tokens before compaction |
+| `file_ids` | array | File IDs referenced in this summary |
 
-```
-relevance = (fts_score × fts_weight) + (temporal_score × temporal_weight) + (importance × importance_weight)
-```
+**Summary Kinds:**
 
-**Default Weights:**
-- FTS Weight: 0.4
-- Temporal Weight: 0.3
-- Importance Weight: 0.3
+| Kind | Depth | Description |
+|------|-------|-------------|
+| `leaf` | 0 | Summarizes raw conversation messages |
+| `condensed` | 1+ | Summarizes lower-level summaries |
 
-### 4. MemoryConsolidator
+**Key Methods:**
+- [`isLeaf()`](../app/Models/MemorySummary.php:171): Check if leaf summary
+- [`isCondensed()`](../app/Models/MemorySummary.php:179): Check if condensed summary
+- [`getCompressionRatio()`](../app/Models/MemorySummary.php:187): Get compression ratio
 
-Handles maintenance operations:
-- **Decay**: Reduce importance of unaccessed memories
-- **Prune**: Delete low-value, unaccessed memories
-- **Merge**: Combine duplicate memories
+### 3. SummaryStore Service
 
----
+Handles persistence and retrieval of summaries and context items.
 
-## Memory Lifecycle
+**Key Operations:**
+- [`appendContextMessage()`](../app/Services/Memory/SummaryStore.php:147): Add a message to context
+- [`replaceContextRangeWithSummary()`](../app/Services/Memory/SummaryStore.php:209): Replace messages with summary
+- [`linkSummaryToMessages()`](../app/Services/Memory/SummaryStore.php:290): Link leaf summary to source messages
+- [`linkSummaryToParents()`](../app/Services/Memory/SummaryStore.php:310): Link condensed summary to parent summaries
 
-### Stage 1: Creation
+### 4. CompactionEngine Service
 
-When a memory is created, it receives:
+Implements the lossless compaction algorithm with two-phase processing.
 
-1. **UUID** - Unique identifier
-2. **Event Type** - Determines default importance
-3. **Initial Importance** - Based on event type or custom value
-4. **Access Count** - Set to 0
-5. **Last Accessed** - Set to current time
+**Key Operations:**
+- [`evaluate()`](../app/Services/Memory/CompactionEngine.php:72): Check if compaction is needed
+- [`compact()`](../app/Services/Memory/CompactionEngine.php:109): Run full compaction sweep
+- [`compactUntilUnder()`](../app/Services/Memory/CompactionEngine.php:271): Compact until under target tokens
 
-```php
-// Example: Recording a preference learned
-$memoryId = $memoryEngine->recordEvent(
-    senderId: 'user_12345',
-    channel: ChannelEnum::DISCORD,
-    event: [
-        'type' => EpisodicEventTypeEnum::PREFERENCE_LEARNED,
-        'content' => 'User prefers dark mode in all applications',
-        'outcome' => 'Preference stored for future UI decisions',
-        'importance' => 0.80, // Default for PREFERENCE_LEARNED
-    ]
-);
-```
+### 5. IntegrityChecker Service
 
-### Stage 2: Active Use (Reinforcement)
+Validates the integrity of the memory system.
 
-When a memory is retrieved and used:
-
-1. **Access Count** increments by 1
-2. **Last Accessed** updates to current time
-3. **Temporal Score** improves due to access bonus
-
-```php
-// Reinforcement happens automatically during search
-$results = $memoryEngine->search(
-    senderId: 'user_12345',
-    channel: ChannelEnum::DISCORD,
-    query: 'UI preferences'
-);
-
-// Or manually reinforce a specific memory
-$memoryEngine->reinforce($memoryId);
-```
-
-**Temporal Score Formula:**
-```
-temporal_score = e^(-rate × days_since_access) × (1 + bonus × access_count)
-```
-
-With default values:
-- `rate = 0.05` (decay rate)
-- `bonus = 0.02` (access bonus per access)
-
-### Stage 3: Decay (Without Use)
-
-After `decay_after_days` (default: 7 days) without access:
-
-1. **Importance** multiplies by `decay_factor` (default: 0.95)
-2. This is a **5% reduction** per consolidation run
-3. Decay continues until `min_importance` (default: 0.05) is reached
-
-```
-Day 0:   importance = 0.80
-Day 7:   importance = 0.80 × 0.95 = 0.76
-Day 14:  importance = 0.76 × 0.95 = 0.72
-Day 21:  importance = 0.72 × 0.95 = 0.68
-...
-Day 70:  importance ≈ 0.49 (after 10 decay cycles)
-```
-
-### Stage 4: Pruning (Deletion)
-
-Memories are deleted when ALL conditions are met:
-
-1. **Importance** < `prune_max_importance` (default: 0.1)
-2. **Access Count** = 0 (never accessed)
-3. **Age** > `prune_after_days` (default: 30 days)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Memory Lifecycle Graph                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Creation                                                       │
-│     │                                                           │
-│     ▼                                                           │
-│  ┌─────────────────┐                                            │
-│  │  importance=0.8 │                                            │
-│  │  access_count=0 │                                            │
-│  └────────┬────────┘                                            │
-│           │                                                     │
-│           ▼                                                     │
-│     ┌─────────┐                                                 │
-│     │  USED?  │──── Yes ───▶  ┌─────────────────┐               │
-│     └────┬────┘               │ access_count++  │               │
-│          │                    │ last_access=now │               │
-│          No                   │ importance +=   │               │
-│          │                    │   (bonus)       │               │
-│          ▼                    └────────┬────────┘               │
-│   After 7 days                         │                        │
-│          │                             │                        │
-│          ▼                             │                        │
-│  ┌─────────────────┐                   │                        │
-│  │ importance ×    │                   │                        │
-│  │   0.95 (decay)  │                   │                        │
-│  └────────┬────────┘                   │                        │
-│           │                            │                        │
-│           ▼                            │                        │
-│     ┌────────────┐                     │                        │
-│     │ importance │─── < 0.1 ───┐       │                        │
-│     │            │            │       │                        │
-│     │ access=0?  │─── Yes ────┼───▶ PRUNED                      │
-│     │            │            │       │                        │
-│     │ age > 30d? │─── Yes ────┘       │                        │
-│     └────────────┘                     │                        │
-│                                        │                        │
-│          ◀─────────────────────────────┘                        │
-│                    (Cycle continues)                             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Stage 5: Merging (Deduplication)
-
-When two memories are highly similar:
-
-1. **Similarity** > `merge_similarity_threshold` (default: 0.8)
-2. **Same Event Type**
-3. Newer memory absorbs older memory:
-   - Importance increases: `newer.importance += older.importance × 0.2`
-   - Access counts combine: `newer.access_count += older.access_count`
-   - Older memory is deleted
+**Checks Performed:**
+1. Conversation exists
+2. Context items have contiguous ordinals
+3. All context item references are valid
+4. Summaries have proper lineage
+5. No orphaned summaries
+6. Token counts are consistent
+7. Message sequence is contiguous
+8. No duplicate context references
 
 ---
 
-## Scheduled Maintenance
+## Compaction Flow
 
-### Required Scheduler Entry
+### Trigger Conditions
 
-Add to `app/Console/Kernel.php`:
+Compaction is triggered when:
+
+1. **Threshold Exceeded**: Context tokens exceed `context_threshold × token_budget`
+2. **Leaf Trigger**: Raw message tokens outside fresh tail exceed `leaf_chunk_tokens`
+
+### Two-Phase Compaction
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Compaction Flow                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Phase 1: Leaf Pass (Messages → Leaf Summaries)                             │
+│  ─────────────────────────────────────────────                              │
+│                                                                              │
+│    [Msg0] [Msg1] [Msg2] ... [MsgN]                                          │
+│         │                   │                                                │
+│         └─────► [Leaf Summary (depth=0)] ◄─────┘                            │
+│                       │                                                      │
+│                       ▼                                                      │
+│              Links to source messages                                        │
+│              stored in memory_summary_messages                               │
+│                                                                              │
+│                                                                              │
+│  Phase 2: Condensed Pass (Leaf Summaries → Condensed Summaries)             │
+│  ──────────────────────────────────────────────────────────────────         │
+│                                                                              │
+│    [Leaf0] [Leaf1] [Leaf2] [Leaf3]                                          │
+│         │                   │                                                │
+│         └─► [Condensed Summary (depth=1)] ◄──┘                              │
+│                       │                                                      │
+│                       ▼                                                      │
+│              Links to parent summaries                                       │
+│              stored in memory_summary_parents                                │
+│                                                                              │
+│                                                                              │
+│  Fresh Tail Protection                                                       │
+│  ─────────────────────                                                       │
+│                                                                              │
+│    [Summary] [Summary] [Msg] [Msg] [Msg] [Msg] [Msg] [Msg]                  │
+│                               │                              │               │
+│                               └──── Fresh Tail (N msgs) ────┘               │
+│                                     Never compacted                          │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Three-Level Escalation
+
+When summarization doesn't reduce tokens sufficiently, the engine escalates:
+
+| Level | Description | Behavior |
+|-------|-------------|----------|
+| `normal` | Standard summarization | Full summary with context preservation |
+| `aggressive` | Aggressive summarization | More concise summary, less context |
+| `fallback` | Truncation | Simple truncation with marker |
+
+### Feedback-Aware Compaction
+
+Messages with positive feedback are preserved longer by applying a threshold reduction, making them less likely to be included in compaction chunks.
+
+---
+
+## Context Window Structure
+
+The context window is an ordered list of items, oldest first:
+
+```
+Ordinal:  0        1        2        3        4        5        6
+         ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┐
+         │Summary │Summary │ Msg    │ Msg    │ Msg    │ Msg    │ Msg    │
+         │depth=1 │depth=0 │ id=42  │ id=43  │ id=44  │ id=45  │ id=46  │
+         └────────┴────────┴────────┴────────┴────────┴────────┴────────┘
+                  │                 │                          │
+                  │                 └── Fresh tail starts ─────┘
+                  │                     (protected from compaction)
+                  │
+                  └── Condensed summary (depth=1)
+                      summarizes leaf summaries (depth=0)
+```
+
+---
+
+## Lossless Reconstruction
+
+The DAG structure enables full reconstruction of original content:
+
+### For Leaf Summaries
 
 ```php
-protected function schedule(Schedule $schedule): void
-{
-    // Run memory consolidation daily at 3 AM
-    $schedule->command('laraclaw:memory:consolidate')
-        ->dailyAt('03:00')
-        ->withoutOverlapping()
-        ->onOneServer();
-}
+$summary = MemorySummary::find('sum_abc123');
+$sourceMessageIds = DB::table('memory_summary_messages')
+    ->where('summary_id', 'sum_abc123')
+    ->orderBy('ordinal')
+    ->pluck('message_id');
+
+$originalMessages = ConversationMessage::whereIn('id', $sourceMessageIds)->get();
 ```
 
-### Manual Execution
+### For Condensed Summaries
 
-```bash
-# Consolidate all users
-php artisan laraclaw:memory:consolidate
+```php
+$summary = MemorySummary::find('sum_def456');
+$parentSummaryIds = DB::table('memory_summary_parents')
+    ->where('summary_id', 'sum_def456')
+    ->orderBy('ordinal')
+    ->pluck('parent_summary_id');
 
-# Consolidate specific user
-php artisan laraclaw:memory:consolidate --sender=user_12345 --channel=discord
-
-# Dry run (preview changes)
-php artisan laraclaw:memory:consolidate --dry-run
-```
-
-### Command Output
-
-```
-Consolidating memories for all users...
-Found 42 unique users with memories.
-
-Consolidation complete:
-  - Total decayed: 156 memories
-  - Total pruned: 23 memories
-  - Total merged: 8 duplicates
+// Recursively traverse to leaf summaries, then to messages
 ```
 
 ---
 
 ## Configuration
 
-All settings in [`config/memory.php`](../config/memory.php):
-
-### Scoring Weights
+All settings in `config/laraclaw.php`:
 
 ```php
-'scoring' => [
-    'fts_weight' => 0.4,        // Full-text search weight
-    'temporal_weight' => 0.3,   // Temporal decay weight
-    'importance_weight' => 0.3, // Importance weight
-],
-```
-
-### Decay Parameters
-
-```php
-'decay' => [
-    'rate' => 0.05,           // Decay rate (higher = faster decay)
-    'access_bonus' => 0.02,   // Bonus per access
-    'min_importance' => 0.05, // Minimum before pruning eligible
-],
-```
-
-### Consolidation Parameters
-
-```php
-'consolidation' => [
-    'decay_after_days' => 7,        // Days before decay starts
-    'decay_factor' => 0.95,         // 5% reduction per cycle
-    'prune_after_days' => 30,       // Days before pruning eligible
-    'prune_max_importance' => 0.1,  // Max importance for pruning
-    'merge_similarity_threshold' => 0.8, // Jaccard similarity
-    'merge_check_limit' => 200,     // Max memories to check
+'memory' => [
+    // Enable/disable lossless memory
+    'lossless_enabled' => env('LARACLAW_MEMORY_LOSSLESS_ENABLED', true),
+    
+    // Token budget for context window
+    'lossless_token_budget' => env('LARACLAW_MEMORY_TOKEN_BUDGET', 100000),
+    
+    // Threshold ratio to trigger compaction (0.75 = 75% of budget)
+    'lossless_context_threshold' => env('LARACLAW_MEMORY_CONTEXT_THRESHOLD', 0.75),
+    
+    // Number of recent messages to protect from compaction
+    'lossless_fresh_tail' => env('LARACLAW_MEMORY_FRESH_TAIL', 8),
 ],
 ```
 
 ### Environment Variables
 
 ```env
-# Scoring
-MEMORY_FTS_WEIGHT=0.4
-MEMORY_TEMPORAL_WEIGHT=0.3
-MEMORY_IMPORTANCE_WEIGHT=0.3
+# Enable lossless memory
+LARACLAW_MEMORY_LOSSLESS_ENABLED=true
 
-# Decay
-MEMORY_DECAY_RATE=0.05
-MEMORY_ACCESS_BONUS=0.02
-MEMORY_MIN_IMPORTANCE=0.05
+# Token budget
+LARACLAW_MEMORY_TOKEN_BUDGET=100000
 
-# Consolidation
-MEMORY_DECAY_AFTER_DAYS=7
-MEMORY_DECAY_FACTOR=0.95
-MEMORY_PRUNE_AFTER_DAYS=30
-MEMORY_PRUNE_MAX_IMPORTANCE=0.1
-MEMORY_MERGE_THRESHOLD=0.8
-MEMORY_MERGE_LIMIT=200
+# Compaction threshold (0.0-1.0)
+LARACLAW_MEMORY_CONTEXT_THRESHOLD=0.75
+
+# Fresh tail protection count
+LARACLAW_MEMORY_FRESH_TAIL=8
 ```
 
 ---
 
 ## Usage Examples
 
-### Recording Events
+### Appending Messages to Context
 
 ```php
 use App\Services\MemoryEngineService;
-use App\Enums\ChannelEnum;
-use App\Enums\EpisodicEventTypeEnum;
 
 $memory = app(MemoryEngineService::class);
 
-// Record a user correction (high importance)
-$memory->recordEvent(
-    senderId: 'user_12345',
-    channel: ChannelEnum::DISCORD,
-    event: [
-        'type' => EpisodicEventTypeEnum::CORRECTION,
-        'content' => 'User corrected: They prefer Python over JavaScript',
-        'outcome' => 'Updated language preference',
-    ]
-);
+// Append a single message
+$memory->appendMessageToContext($conversationId, $messageId);
 
-// Record a completed task (medium importance)
-$memory->recordEvent(
-    senderId: 'user_12345',
-    channel: ChannelEnum::DISCORD,
-    event: [
-        'type' => EpisodicEventTypeEnum::TASK_COMPLETED,
-        'content' => 'Successfully deployed to production',
-        'outcome' => 'Deployment completed without errors',
-        'agent_id' => 'deploy-bot',
-    ]
-);
+// Append multiple messages
+$memory->appendMessagesToContext($conversationId, [$messageId1, $messageId2]);
 ```
 
-### Searching Memories
+### Evaluating Compaction Need
 
 ```php
-// Search for relevant memories
-$results = $memory->search(
-    senderId: 'user_12345',
-    channel: ChannelEnum::DISCORD,
-    query: 'programming language preferences',
-    limit: 10
+$decision = $memory->evaluateCompaction(
+    conversationId: $conversationId,
+    tokenBudget: 100000
 );
 
-// Results include relevance scores
-foreach ($results as $result) {
-    echo "[{$result['source']}] {$result['content']} (score: {$result['relevance_score']})\n";
+if ($decision->shouldCompact) {
+    echo "Compaction needed: {$decision->currentTokens} > {$decision->threshold}";
 }
 ```
 
-### Getting Context for Agents
+### Running Compaction
 
 ```php
-// Get formatted context for prompt injection
-$context = $memory->getContextForAgent(
-    senderId: 'user_12345',
-    channel: ChannelEnum::DISCORD,
-    query: 'current project status'
+use App\Services\Memory\LosslessCompactionService;
+
+$service = app(LosslessCompactionService::class);
+
+// Set custom summarizer (optional)
+$service->setSummarizer(function (string $content, bool $aggressive, array $options) {
+    // Use LLM to summarize
+    return $llmClient->summarize($content, $aggressive);
+});
+
+// Compact a single conversation
+$result = $service->compactConversation($conversationId);
+
+echo "Tokens: {$result->tokensBefore} → {$result->tokensAfter}";
+echo "Saved: {$result->getTokenReduction()} tokens";
+```
+
+### Running Integrity Checks
+
+```php
+$report = $memory->checkIntegrity($conversationId);
+
+if ($report->isHealthy()) {
+    echo "All {$report->passCount} checks passed";
+} else {
+    foreach ($report->getFailures() as $failure) {
+        echo "FAIL: {$failure->name} - {$failure->message}";
+    }
+    
+    $suggestions = $memory->getRepairPlan($report);
+    foreach ($suggestions as $suggestion) {
+        echo "Suggestion: {$suggestion}";
+    }
+}
+```
+
+### Getting Context for Agent Prompts
+
+```php
+$context = $memory->getLosslessContextForAgent(
+    conversationId: $conversationId,
+    maxTokens: 4000
 );
 
-// Returns formatted sections:
-// ## Relevant Memories
-// 📝 User prefers Python over JavaScript
-// 📝 Deployment completed without errors
-//
-// ## Important Context
-// ⚠️ Correction: They prefer Python over JavaScript
-// ⭐ Preference Learned: Dark mode preference
+// Returns formatted context string with summaries and messages
 ```
 
 ---
 
-## Legacy KeyValueMemory
+## Queue Job
 
-> **Note:** KeyValueMemory is a legacy system maintained for backward compatibility. It provides simple key-value storage but lacks the sophisticated features of EpisodicMemory.
-
-### Differences
-
-| Feature | KeyValueMemory | EpisodicMemory |
-|---------|---------------|----------------|
-| Search | Basic token matching | Full-text + BM25 |
-| Decay | None | Ebbinghaus curve |
-| Importance | None | Per-event scoring |
-| Outcomes | None | Supported |
-| Deduplication | None | Automatic merging |
-
-### Migration Path
-
-To migrate from KeyValueMemory to EpisodicMemory:
+Compaction can be run asynchronously via queue job:
 
 ```php
-// Old: KeyValueMemory
-KeyValueMemory::store($senderId, $channel, 'timezone', 'Europe/Berlin');
+use App\Jobs\LosslessCompactionJob;
 
-// New: EpisodicMemory
-$memory->recordEvent(
-    senderId: $senderId,
-    channel: $channel,
-    event: [
-        'type' => EpisodicEventTypeEnum::FACT_STORED,
-        'content' => 'User timezone: Europe/Berlin',
-        'importance' => 0.60,
-    ]
+// Compact a single conversation
+dispatch(new LosslessCompactionJob(conversationId: 123));
+
+// Compact all conversations
+dispatch(new LosslessCompactionJob(compactAll: true));
+
+// Dry run (no changes)
+dispatch(new LosslessCompactionJob(conversationId: 123, dryRun: true));
+```
+
+### Job Properties
+
+| Property | Value |
+|----------|-------|
+| `$tries` | 3 |
+| `$timeout` | 300 seconds |
+| `retryUntil()` | 30 minutes |
+
+---
+
+## Database Schema
+
+### memory_context_items
+
+```sql
+CREATE TABLE memory_context_items (
+    conversation_id BIGINT NOT NULL,
+    ordinal INT NOT NULL,
+    item_type VARCHAR(10) NOT NULL,
+    message_id BIGINT NULL,
+    summary_id VARCHAR(32) NULL,
+    created_at TIMESTAMP NULL,
+    PRIMARY KEY (conversation_id, ordinal),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+    FOREIGN KEY (message_id) REFERENCES conversation_messages(id),
+    FOREIGN KEY (summary_id) REFERENCES memory_summaries(summary_id)
+);
+```
+
+### memory_summaries
+
+```sql
+CREATE TABLE memory_summaries (
+    summary_id VARCHAR(32) PRIMARY KEY,
+    conversation_id BIGINT NOT NULL,
+    kind VARCHAR(10) NOT NULL,
+    depth INT NOT NULL DEFAULT 0,
+    content TEXT NOT NULL,
+    token_count INT NOT NULL,
+    earliest_at TIMESTAMP NULL,
+    latest_at TIMESTAMP NULL,
+    descendant_count INT NOT NULL DEFAULT 0,
+    descendant_token_count INT NOT NULL DEFAULT 0,
+    source_message_token_count INT NOT NULL DEFAULT 0,
+    file_ids JSON NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+);
+```
+
+### memory_summary_messages
+
+```sql
+CREATE TABLE memory_summary_messages (
+    summary_id VARCHAR(32) NOT NULL,
+    message_id BIGINT NOT NULL,
+    ordinal INT NOT NULL,
+    PRIMARY KEY (summary_id, message_id),
+    FOREIGN KEY (summary_id) REFERENCES memory_summaries(summary_id),
+    FOREIGN KEY (message_id) REFERENCES conversation_messages(id)
+);
+```
+
+### memory_summary_parents
+
+```sql
+CREATE TABLE memory_summary_parents (
+    summary_id VARCHAR(32) NOT NULL,
+    parent_summary_id VARCHAR(32) NOT NULL,
+    ordinal INT NOT NULL,
+    PRIMARY KEY (summary_id, parent_summary_id),
+    FOREIGN KEY (summary_id) REFERENCES memory_summaries(summary_id),
+    FOREIGN KEY (parent_summary_id) REFERENCES memory_summaries(summary_id)
 );
 ```
 
@@ -446,81 +467,106 @@ $memory->recordEvent(
 
 ## Best Practices
 
-### 1. Choose Appropriate Event Types
+### 1. Configure Appropriate Token Budget
 
-- Use `CORRECTION` when user explicitly corrects agent behavior
-- Use `PREFERENCE_LEARNED` for user preferences discovered through interaction
-- Use `FACT_STORED` for general facts about the user
-- Use `TASK_COMPLETED` for successful task outcomes
-- Use `DELEGATION_RESULT` for inter-agent delegation results
-
-### 2. Set Meaningful Content
+Set the token budget based on your LLM's context window:
 
 ```php
-// Bad: Vague content
-'content' => 'User likes something'
+// For GPT-4 with 128k context
+'lossless_token_budget' => 100000,
 
-// Good: Specific, searchable content
-'content' => 'User prefers VS Code with Vim keybindings for TypeScript development'
+// Leave headroom for system prompt and response
 ```
 
-### 3. Include Outcomes When Relevant
+### 2. Adjust Fresh Tail for Your Use Case
 
 ```php
-'content' => 'User requested deployment to staging',
-'outcome' => 'Deployed successfully, URL: https://staging.example.com'
+// For conversational agents (preserve recent context)
+'lossless_fresh_tail' => 12,
+
+// For task-oriented agents (more aggressive compaction)
+'lossless_fresh_tail' => 4,
 ```
 
-### 4. Schedule Regular Consolidation
+### 3. Implement a Quality Summarizer
 
-Run consolidation at least daily to:
-- Prevent memory bloat
-- Maintain relevant importance scores
-- Remove stale, unused memories
+The default summarizer uses simple truncation. For production, implement an LLM-based summarizer:
 
-### 5. Monitor Memory Statistics
+```php
+$service->setSummarizer(function (string $content, bool $aggressive, array $options) {
+    $prompt = $aggressive
+        ? "Summarize concisely (2-3 sentences): {$content}"
+        : "Summarize with key details preserved: {$content}";
+    
+    return $llmClient->complete($prompt);
+});
+```
 
-```bash
-# Check memory health
-php artisan laraclaw:memory:consolidate --sender=user_12345 --channel=discord --dry-run
+### 4. Run Integrity Checks Periodically
 
-# Output shows:
-# - Total memories
-# - Average importance
-# - Prune candidates
-# - Old (unaccessed) memories
+```php
+// In a scheduled command
+$schedule->call(function () {
+    $service = app(LosslessCompactionService::class);
+    $result = $service->checkIntegrityAll();
+    
+    if ($result['unhealthy'] > 0) {
+        // Alert administrators
+    }
+})->weekly();
+```
+
+### 5. Monitor Compaction Results
+
+```php
+$result = $service->compactConversation($conversationId);
+
+if ($result->actionTaken) {
+    Log::info('Compaction complete', [
+        'conversation_id' => $conversationId,
+        'tokens_saved' => $result->getTokenReduction(),
+        'compression_ratio' => $result->getCompressionRatio(),
+        'level' => $result->level,
+    ]);
+}
 ```
 
 ---
 
 ## Troubleshooting
 
-### Memories Not Being Retrieved
+### Compaction Not Reducing Tokens
 
-1. Check importance threshold: `shouldBeSearchable()` requires importance ≥ 0.1
-2. Verify Scout configuration for full-text search
-3. Check that sender_id and channel match exactly
+1. Check if summarizer is returning content longer than input
+2. Verify escalation is working (check `level` in result)
+3. Ensure fresh tail isn't too large
 
-### Too Many Memories Being Pruned
+### Integrity Check Failures
 
-1. Increase `prune_max_importance` threshold
-2. Increase `prune_after_days` window
-3. Ensure memories are being reinforced when used
+1. **context_items_contiguous**: Run `SummaryStore::resequenceOrdinals()`
+2. **context_items_valid_refs**: Remove dangling references
+3. **summaries_have_lineage**: Add missing links to `memory_summary_messages` or `memory_summary_parents`
+4. **no_orphan_summaries**: Remove orphaned summaries from `memory_summaries`
 
-### Memories Not Decaying
+### High Memory Usage
 
-1. Verify consolidation is scheduled and running
-2. Check `decay_after_days` setting
-3. Ensure `last_accessed_at` is being updated
+1. Reduce `lossless_token_budget`
+2. Reduce `lossless_fresh_tail`
+3. Run compaction more frequently
+4. Implement more aggressive summarization
 
 ---
 
 ## Related Files
 
-- [`app/Models/Memory.php`](../app/Models/Memory.php) - Memory model
-- [`app/Services/MemoryEngineService.php`](../app/Services/MemoryEngineService.php) - Main service
-- [`app/Services/Memory/MemoryConsolidator.php`](../app/Services/Memory/MemoryConsolidator.php) - Maintenance logic
-- [`app/Services/Memory/MemoryRelevanceScorer.php`](../app/Services/Memory/MemoryRelevanceScorer.php) - Scoring logic
-- [`app/Console/Commands/LaraClawMemoryConsolidateCommand.php`](../app/Console/Commands/LaraClawMemoryConsolidateCommand.php) - CLI command
-- [`config/memory.php`](../config/memory.php) - Configuration
-
+- [`app/Models/MemoryContextItem.php`](../app/Models/MemoryContextItem.php) - Context item model
+- [`app/Models/MemorySummary.php`](../app/Models/MemorySummary.php) - Summary model
+- [`app/Services/MemoryEngineService.php`](../app/Services/MemoryEngineService.php) - Main service facade
+- [`app/Services/Memory/SummaryStore.php`](../app/Services/Memory/SummaryStore.php) - Persistence layer
+- [`app/Services/Memory/CompactionEngine.php`](../app/Services/Memory/CompactionEngine.php) - Compaction logic
+- [`app/Services/Memory/IntegrityChecker.php`](../app/Services/Memory/IntegrityChecker.php) - Integrity validation
+- [`app/Services/Memory/LosslessCompactionService.php`](../app/Services/Memory/LosslessCompactionService.php) - High-level API
+- [`app/Jobs/LosslessCompactionJob.php`](../app/Jobs/LosslessCompactionJob.php) - Queue job
+- [`app/DTOs/CompactionDecisionDTO.php`](../app/DTOs/CompactionDecisionDTO.php) - Decision DTO
+- [`app/DTOs/CompactionResultDTO.php`](../app/DTOs/CompactionResultDTO.php) - Result DTO
+- [`app/DTOs/IntegrityReportDTO.php`](../app/DTOs/IntegrityReportDTO.php) - Integrity report DTO

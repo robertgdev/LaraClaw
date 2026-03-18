@@ -7,8 +7,9 @@ namespace App\DTOs;
 final readonly class IntentClassificationDTO
 {
     /**
-     * @param  list<string>  $keywords
      * @param  array<string, mixed>  $entities
+     * @param  array<string>  $keywords
+     * @param  array<string>  $allScores
      */
     public function __construct(
         public string $intent,

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Chat;
 
-use App\Enums\ChannelEnum;
 use App\Logging\MultiLogger;
 use App\Models\Event;
 use App\Services\AgentInvokerService;
@@ -12,19 +11,20 @@ use App\Services\ConversationHistoryService;
 use App\Services\MemoryEngineService;
 use App\Services\SettingsService;
 use Illuminate\Console\OutputStyle;
-use Illuminate\Support\Str;
+
+use function Safe\preg_match;
 
 /**
  * Processes user messages through the agent system in the interactive chat.
  *
  * Handles @agent_id / @team_id routing, agent invocation, history
- * saving, event emission, memory recording, and error handling.
+ * saving, event emission, and error handling.
  */
 class ChatMessageProcessor
 {
-    protected ?MemoryEngineService $memoryService = null;
-
     protected string $senderId = 'cli-user';
+
+    protected ?MemoryEngineService $memoryService = null;
 
     public function __construct(
         protected SettingsService $settings,
@@ -34,21 +34,22 @@ class ChatMessageProcessor
     ) {}
 
     /**
-     * Set the memory service for episodic memory recording.
+     * Set the sender ID for context.
      */
-    public function setMemoryService(MemoryEngineService $memoryService): self
+    public function setSenderId(string $senderId): self
     {
-        $this->memoryService = $memoryService;
+        $this->senderId = $senderId;
 
         return $this;
     }
 
     /**
-     * Set the sender ID for memory context.
+     * Set the memory service for lossless context tracking.
      */
-    public function setSenderId(string $senderId): self
+    public function setMemoryService(MemoryEngineService $memoryService): self
     {
-        $this->senderId = $senderId;
+        $this->memoryService = $memoryService;
+        $this->chatHistoryService->setMemoryService($memoryService);
 
         return $this;
     }
@@ -148,9 +149,6 @@ class ChatMessageProcessor
                 'responseLength' => strlen($response),
             ]);
 
-            // Record episodic memory
-            $this->recordEpisodicEvent($message, $response, $agentId);
-
             // Display response
             $this->renderer->displayResponse($output, $response, $duration);
 
@@ -178,38 +176,5 @@ class ChatMessageProcessor
         }
 
         return null;
-    }
-
-    /**
-     * Record an episodic memory event (fire-and-forget).
-     */
-    protected function recordEpisodicEvent(string $message, string $response, string $agentId): void
-    {
-        if ($this->memoryService === null || ! $this->memoryService->isEnabled()) {
-            return;
-        }
-
-        $content = $this->memoryService->truncateText('User: '.$message);
-        $outcome = $this->memoryService->truncateText($response);
-
-        // If truncation returns null, memory is disabled
-        if ($content === null || $outcome === null) {
-            return;
-        }
-
-        try {
-            $this->memoryService->recordEvent(
-                $this->senderId,
-                ChannelEnum::CLI,
-                [
-                    'type' => 'task_completed',
-                    'content' => $content,
-                    'outcome' => $outcome,
-                    'agent_id' => $agentId,
-                ]
-            );
-        } catch (\Exception $e) {
-            MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
-        }
     }
 }

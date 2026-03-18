@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\ParsedSkillDTO;
 use App\Logging\MultiLogger;
 use App\Services\SettingsService;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
@@ -21,6 +23,7 @@ class SkillIndexer
 
     protected SkillFileParser $parser;
 
+    /** @var array<int, array{type: string, path: string}> */
     protected array $skillsDirs = [];
 
     protected string $cacheKey = 'laraclaw_skills_index';
@@ -57,14 +60,18 @@ class SkillIndexer
 
     /**
      * Index all skills from all directories (respecting priority order).
-     *
-     * @return array<string, array> Keyed by skill name
      */
-    public function indexSkills(): array
+    public function indexSkills(): ParsedSkillDTOCollection
     {
         $cached = Cache::get($this->cacheKey);
         if ($cached) {
-            return $cached;
+            // Reconstruct DTOs from cached array data
+            $skills = array_map(
+                fn (array $data) => ParsedSkillDTO::fromArray($data),
+                $cached
+            );
+
+            return ParsedSkillDTOCollection::fromKeyedArray($skills);
         }
 
         $index = [];
@@ -87,22 +94,23 @@ class SkillIndexer
 
                 $skill = $this->parser->parse($skillFile);
                 if ($skill) {
-                    $index[$skill['name']] = $skill;
+                    $index[$skill->name] = $skill;
                 }
             }
         }
 
-        Cache::put($this->cacheKey, $index, $this->cacheTTL);
+        // Cache as arrays for serialization
+        Cache::put($this->cacheKey, array_map(fn ($dto) => $dto->toArray(), $index), $this->cacheTTL);
 
         MultiLogger::info('Indexed '.count($index).' skills');
 
-        return $index;
+        return ParsedSkillDTOCollection::fromKeyedArray($index);
     }
 
     /**
      * Refresh the skill index (clear cache and reindex).
      */
-    public function refreshIndex(): array
+    public function refreshIndex(): ParsedSkillDTOCollection
     {
         Cache::forget($this->cacheKey);
 

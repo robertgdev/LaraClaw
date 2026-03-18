@@ -24,7 +24,7 @@ class ConversationSearchService
      * @param  string  $query  Search query
      * @param  int  $limit  Maximum results
      * @param  string|null  $teamId  Optional team filter
-     * @return \Illuminate\Database\Eloquent\Builder|\Laravel\Scout\Builder
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\Conversation>|\Laravel\Scout\Builder<\App\Models\Conversation>
      */
     public function search(string $query, int $limit = 20, ?string $teamId = null)
     {

@@ -170,7 +170,7 @@ class SetupAgentConfigurator
     /**
      * Select which agent should be the default for routing.
      *
-     * @param  array  $config  Current config with default_agent_id, default_agent_name, provider, model, additional_agents
+     * @param  array<string, mixed>  $config  Current config with default_agent_id, default_agent_name, provider, model, additional_agents
      * @return string The selected default agent ID
      */
     public function selectDefaultAgent(array $config): string

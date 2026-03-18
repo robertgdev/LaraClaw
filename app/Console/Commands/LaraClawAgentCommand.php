@@ -414,7 +414,7 @@ class LaraClawAgentCommand extends Command
         // Refresh the skill index first
         $this->info('Scanning available skills...');
         $skills = $skillService->refreshIndex();
-        $skillNames = array_keys($skills);
+        $skillNames = array_keys($skills->toArray());
         $this->info(sprintf('  Found %d skills: %s', count($skillNames), implode(', ', $skillNames)));
 
         if ($allAgents) {

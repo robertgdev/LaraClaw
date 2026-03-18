@@ -1,9 +1,11 @@
 <?php
 
+use App\DTOs\ParsedSkillDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
 use App\Services\SettingsService;
 use App\Services\SkillSearchService;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
@@ -27,12 +29,14 @@ describe('SkillSearchService', function () {
             $cachedIndex = $this->service->getAllSkills();
 
             // If we have skills, verify caching works
-            if (! empty($cachedIndex)) {
+            if ($cachedIndex->isNotEmpty()) {
                 // Act - should return cached version
                 $result = $this->service->indexSkills();
 
-                // Assert
-                expect($result)->toBe($cachedIndex);
+                // Assert - same skill names should be present
+                $cachedNames = $cachedIndex->map(fn ($s) => $s->name)->toArray();
+                $resultNames = $result->getNames();
+                expect($resultNames)->toBe(array_values($cachedNames));
             } else {
                 expect(true)->toBeTrue(); // Skip if no skills
             }
@@ -45,9 +49,9 @@ describe('SkillSearchService', function () {
             // Act
             $result = $this->service->refreshIndex();
 
-            // Assert - should find at least agent-browser skill
-            expect($result)->toBeArray()
-                ->and(count($result))->toBeGreaterThanOrEqual(0);
+            // Assert - should find at least some skills
+            expect($result)->toBeInstanceOf(ParsedSkillDTOCollection::class)
+                ->and($result->count())->toBeGreaterThanOrEqual(0);
         });
     });
 
@@ -60,19 +64,23 @@ describe('SkillSearchService', function () {
             $result = $this->service->search('browser');
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
         });
 
-        it('returns empty array when no matches', function () {
+        it('returns empty collection when no matches', function () {
             // Arrange
-            $skillIndex = [
-                'skill1' => [
-                    'name' => 'skill1',
-                    'description' => 'A skill',
-                    'keywords' => ['keyword'],
-                ],
-            ];
-            Cache::put('laraclaw_skills_index', $skillIndex, 3600);
+            $skillDto = new ParsedSkillDTO(
+                name: 'skill1',
+                dirName: 'skill1',
+                description: 'A skill',
+                path: '/tmp/skill1/SKILL.md',
+                directory: '/tmp/skill1',
+                keywords: ['keyword'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            Cache::put('laraclaw_skills_index', [$skillDto->toArray()], 3600);
 
             // Act
             $result = $this->service->search('nonexistent');
@@ -87,7 +95,7 @@ describe('SkillSearchService', function () {
             $skills = $this->service->getAllSkills();
 
             // Skip if not enough skills
-            if (count($skills) < 3) {
+            if ($skills->count() < 3) {
                 expect(true)->toBeTrue();
 
                 return;
@@ -97,29 +105,33 @@ describe('SkillSearchService', function () {
             $result = $this->service->search('a', 3);
 
             // Assert
-            expect(count($result))->toBeLessThanOrEqual(3);
+            expect($result->count())->toBeLessThanOrEqual(3);
         });
     });
 
     describe('findBestMatch', function () {
         it('returns best matching skill', function () {
             // Arrange
-            $skillIndex = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'description' => 'Generate images',
-                    'keywords' => ['image', 'generate'],
-                ],
-            ];
-            Cache::put('laraclaw_skills_index', $skillIndex, 3600);
+            $skillDto = new ParsedSkillDTO(
+                name: 'imagegen',
+                dirName: 'imagegen',
+                description: 'Generate images',
+                path: '/tmp/imagegen/SKILL.md',
+                directory: '/tmp/imagegen',
+                keywords: ['image', 'generate'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            Cache::put('laraclaw_skills_index', [$skillDto->toArray()], 3600);
 
             // Act
             $result = $this->service->findBestMatch('image generation');
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKey('skill')
-                ->toHaveKey('score');
+            expect($result)->toBeInstanceOf(\App\DTOs\SkillSearchResultDTO::class)
+                ->and($result->skill)->toBeInstanceOf(\App\DTOs\SkillDTO::class)
+                ->and($result->score)->toBeInt();
         });
 
         it('returns null when no match found', function () {
@@ -143,7 +155,7 @@ describe('SkillSearchService', function () {
             $result = $this->service->getAllSkills();
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillDTOCollection::class);
         });
     });
 
@@ -154,20 +166,20 @@ describe('SkillSearchService', function () {
             $skills = $this->service->getAllSkills();
 
             // Skip if no skills
-            if (empty($skills)) {
+            if ($skills->isEmpty()) {
                 expect(true)->toBeTrue();
 
                 return;
             }
 
-            $skillName = array_key_first($skills);
+            $skillName = $skills->first()->name;
 
             // Act
             $result = $this->service->getSkill($skillName);
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKey('name');
+            expect($result)->toBeInstanceOf(\App\DTOs\SkillDTO::class)
+                ->and($result->name)->toBeString();
         });
 
         it('returns null for non-existent skill', function () {
@@ -189,13 +201,13 @@ describe('SkillSearchService', function () {
             $skills = $this->service->getAllSkills();
 
             // Skip if no skills available
-            if (empty($skills)) {
+            if ($skills->isEmpty()) {
                 expect(true)->toBeTrue();
 
                 return;
             }
 
-            $skillName = array_key_first($skills);
+            $skillName = $skills->first()->name;
 
             // Act
             $result = $this->service->getSkillContent($skillName);
@@ -224,9 +236,9 @@ describe('SkillSearchService', function () {
 
             // Find a skill with references
             $skillWithRefs = null;
-            foreach ($skills as $name => $skill) {
-                if (! empty($skill['has_references'])) {
-                    $skillWithRefs = $name;
+            foreach ($skills as $skill) {
+                if ($skill->hasReferences) {
+                    $skillWithRefs = $skill->name;
                     break;
                 }
             }
@@ -242,24 +254,28 @@ describe('SkillSearchService', function () {
             $result = $this->service->getSkillReferences($skillWithRefs);
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillFileDTOCollection::class);
         });
 
-        it('returns empty array when no references', function () {
+        it('returns empty collection when no references', function () {
             // Arrange - create a skill without references in the index
-            $skillIndex = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'has_references' => false,
-                    'directory' => '/nonexistent/path',
-                ],
-            ];
+            $skillDto = new ParsedSkillDTO(
+                name: 'imagegen',
+                dirName: 'imagegen',
+                description: 'Generate images',
+                path: '/nonexistent/path/SKILL.md',
+                directory: '/nonexistent/path',
+                keywords: [],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
 
             // Use reflection to set the skillIndex directly
             $reflection = new ReflectionClass($this->service);
             $property = $reflection->getProperty('skillIndex');
             $property->setAccessible(true);
-            $property->setValue($this->service, $skillIndex);
+            $property->setValue($this->service, new ParsedSkillDTOCollection([$skillDto]));
 
             // Act
             $result = $this->service->getSkillReferences('imagegen');
@@ -277,9 +293,9 @@ describe('SkillSearchService', function () {
 
             // Find a skill with scripts
             $skillWithScripts = null;
-            foreach ($skills as $name => $skill) {
-                if (! empty($skill['has_scripts'])) {
-                    $skillWithScripts = $name;
+            foreach ($skills as $skill) {
+                if ($skill->hasScripts) {
+                    $skillWithScripts = $skill->name;
                     break;
                 }
             }
@@ -295,24 +311,28 @@ describe('SkillSearchService', function () {
             $result = $this->service->getSkillScripts($skillWithScripts);
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillFileDTOCollection::class);
         });
 
-        it('returns empty array when no scripts', function () {
+        it('returns empty collection when no scripts', function () {
             // Arrange - create a skill without scripts in the index
-            $skillIndex = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'has_scripts' => false,
-                    'directory' => '/nonexistent/path',
-                ],
-            ];
+            $skillDto = new ParsedSkillDTO(
+                name: 'imagegen',
+                dirName: 'imagegen',
+                description: 'Generate images',
+                path: '/nonexistent/path/SKILL.md',
+                directory: '/nonexistent/path',
+                keywords: [],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
 
             // Use reflection to set the skillIndex directly
             $reflection = new ReflectionClass($this->service);
             $property = $reflection->getProperty('skillIndex');
             $property->setAccessible(true);
-            $property->setValue($this->service, $skillIndex);
+            $property->setValue($this->service, new ParsedSkillDTOCollection([$skillDto]));
 
             // Act
             $result = $this->service->getSkillScripts('imagegen');
@@ -328,7 +348,7 @@ describe('SkillSearchService', function () {
             $result = $this->service->refreshIndex();
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(ParsedSkillDTOCollection::class);
         });
     });
 
@@ -355,38 +375,46 @@ describe('SkillSearchService', function () {
     describe('suggestSkillsForMessage', function () {
         it('suggests skills based on message', function () {
             // Arrange
-            $skillIndex = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'description' => 'Generate images using AI',
-                    'keywords' => ['image', 'generate', 'ai'],
-                ],
-            ];
-            Cache::put('laraclaw_skills_index', $skillIndex, 3600);
+            $skillDto = new ParsedSkillDTO(
+                name: 'imagegen',
+                dirName: 'imagegen',
+                description: 'Generate images using AI',
+                path: '/tmp/imagegen/SKILL.md',
+                directory: '/tmp/imagegen',
+                keywords: ['image', 'generate', 'ai'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            Cache::put('laraclaw_skills_index', [$skillDto->toArray()], 3600);
 
             // Act
             $result = $this->service->suggestSkillsForMessage('Generate an image for me');
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
         });
 
         it('boosts skills matching intent context', function () {
             // Arrange
-            $skillIndex = [
-                'imagegen' => [
-                    'name' => 'imagegen',
-                    'description' => 'Generate creative images',
-                    'keywords' => ['image', 'generate'],
-                ],
-            ];
-            Cache::put('laraclaw_skills_index', $skillIndex, 3600);
+            $skillDto = new ParsedSkillDTO(
+                name: 'imagegen',
+                dirName: 'imagegen',
+                description: 'Generate creative images',
+                path: '/tmp/imagegen/SKILL.md',
+                directory: '/tmp/imagegen',
+                keywords: ['image', 'generate'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            Cache::put('laraclaw_skills_index', [$skillDto->toArray()], 3600);
 
             // Act
             $result = $this->service->suggestSkillsForMessage('Generate an image', ['intent' => 'creative']);
 
             // Assert
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
         });
     });
 
@@ -460,9 +488,9 @@ describe('SkillSearchService', function () {
             $result = $method->invoke($this->service, $skillFile);
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKey('name')
-                ->toHaveKey('description');
+            expect($result)->toBeInstanceOf(\App\DTOs\ParsedSkillDTO::class)
+                ->and($result->name)->toBeString()
+                ->and($result->description)->toBeString();
         });
 
         it('returns null for file without frontmatter', function () {
@@ -525,21 +553,22 @@ MD;
                 'classification_status' => Skill::STATUS_CLASSIFIED,
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Generate an image of a sunset',
                 keywords: ['generate', 'image', 'sunset'],
                 skillId: $skill->id,
                 confidence: 0.95,
                 category: 'creative',
-                sampleMessage: 'Generate an image of a sunset'
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act - search with similar keywords
             $result = $this->service->suggestSkillsForMessage('Generate an image of a sunset');
 
             // Assert - should hit cache
-            expect($result)->toBeArray()
-                ->and($result[0])->toHaveKey('from_cache', true)
-                ->and($result[0]['skill']['name'])->toBe('imagegen');
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class)
+                ->and($result->first()->fromCache)->toBeTrue()
+                ->and($result->first()->skill->name)->toBe('imagegen');
         });
 
         it('stores new matches using skill name lookup', function () {
@@ -555,27 +584,24 @@ MD;
             ]);
 
             // Set up skill index cache
-            $skillIndex = [
-                'schedule' => [
-                    'name' => 'schedule',
-                    'description' => 'Schedule tasks and reminders',
-                    'keywords' => ['schedule', 'task', 'reminder'],
-                    'dir_name' => 'schedule',
-                    'path' => '/tmp/skills/schedule',
-                    'directory' => '/tmp/skills/schedule',
-                    'source_type' => 'core',
-                    'has_scripts' => false,
-                    'has_references' => false,
-                    'has_assets' => false,
-                ],
-            ];
-            Cache::put('laraclaw_skills_index', $skillIndex, 3600);
+            $skillDto = new ParsedSkillDTO(
+                name: 'schedule',
+                dirName: 'schedule',
+                description: 'Schedule tasks and reminders',
+                path: '/tmp/skills/schedule/SKILL.md',
+                directory: '/tmp/skills/schedule',
+                keywords: ['schedule', 'task', 'reminder'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+            );
+            Cache::put('laraclaw_skills_index', [$skillDto->toArray()], 3600);
 
             // Act - search that won't hit cache
             $result = $this->service->suggestSkillsForMessage('Schedule a reminder for tomorrow');
 
             // Assert - should have stored in cache
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(\App\TypedCollections\SkillSearchResultDTOCollection::class);
 
             // Verify a match was stored
             $storedMatch = SkillMatch::whereHas('skill', fn ($q) => $q->where('name', 'schedule'))->first();
@@ -596,19 +622,21 @@ MD;
                 'keywords' => ['browse', 'website', 'open'],
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Open a website',
                 keywords: ['open', 'website'],
                 skillId: $skill->id,
                 confidence: 0.9,
-                category: 'automation'
+                category: 'automation',
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act
             $result = $this->service->findSkillForMessage('Open a website for me');
 
             // Assert
-            expect($result)->toBeArray()
-                ->toHaveKey('skill');
+            expect($result)->toBeInstanceOf(\App\DTOs\SkillSearchResultDTO::class)
+                ->and($result->skill)->toBeInstanceOf(\App\DTOs\SkillDTO::class);
         });
 
         it('returns null when no match found', function () {
@@ -635,11 +663,14 @@ MD;
                 'checksum' => 'test123',
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Test',
                 keywords: ['test'],
                 skillId: $skill->id,
-                confidence: 0.9
+                confidence: 0.9,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             // Act
             $stats = $this->service->getCacheStatistics();
@@ -662,11 +693,14 @@ MD;
                 'checksum' => 'test123',
             ]);
 
-            SkillMatch::storeMatch(
+            $mapping = new \App\DTOs\IntentMappingDTO(
+                sampleIntent: 'Test',
                 keywords: ['test'],
                 skillId: $skill->id,
-                confidence: 0.9
+                confidence: 0.9,
+                category: 'test',
             );
+            SkillMatch::storeMatch($mapping);
 
             expect(SkillMatch::count())->toBe(1);
 

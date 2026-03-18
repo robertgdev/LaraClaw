@@ -153,7 +153,7 @@ class LaraClawChatCommand extends Command
             }
 
             // Handle EOF (Ctrl+D)
-            if ($input === false || $input === null) {
+            if ($input === false) {
                 $this->newLine();
                 $this->line('<fg=gray>Goodbye! 👋</>');
                 $this->historyManager->save();

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\TypedCollections\IntentMappingDTOCollection;
 use Illuminate\Support\Str;
 
 /**
@@ -28,7 +29,7 @@ class ClassificationPromptBuilder
      * Build a prompt for classifying a single skill.
      *
      * @param  string  $skillName  The skill name
-     * @param  array  $skill  The skill data with 'description' and optional 'keywords'
+     * @param  array{description?: string, keywords?: array<int, string>}  $skill  The skill data with 'description' and optional 'keywords'
      * @return string The prompt
      */
     public function buildSingleSkillPrompt(string $skillName, array $skill): string
@@ -71,17 +72,17 @@ PROMPT;
     /**
      * Build details summary for a single skill from its mappings.
      *
-     * @param  array  $mappings  The mappings for this skill
-     * @return array{intents: array<string>, keywords: array<string>}
+     * @param  IntentMappingDTOCollection  $mappings  The mappings for this skill
+     * @return array{intents: array<int, string>, keywords: array<int, string>}
      */
-    public function buildSkillDetails(array $mappings): array
+    public function buildSkillDetails(IntentMappingDTOCollection $mappings): array
     {
         $intents = [];
         $keywords = [];
 
         foreach ($mappings as $mapping) {
-            $intents[] = $mapping['sample_intent'];
-            $keywords = array_unique(array_merge($keywords, $mapping['keywords'] ?? []));
+            $intents[] = $mapping->sampleIntent;
+            $keywords = array_unique(array_merge($keywords, $mapping->keywords ?? []));
         }
 
         return [

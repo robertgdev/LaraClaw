@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ChannelEnum;
 use App\Enums\PairingStatusEnum;
 use Database\Factories\PairingEntryFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -40,14 +41,18 @@ class PairingEntry extends Model
 
     /**
      * Get all messages from this paired sender.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class, 'sender_id', 'sender_id');
+        return $this->hasMany(ConversationMessage::class, 'sender_id', 'sender_id');
     }
 
     /**
      * Get all conversations from this paired sender.
+     *
+     * @return HasMany<Conversation, $this>
      */
     public function conversations(): HasMany
     {
@@ -56,24 +61,33 @@ class PairingEntry extends Model
 
     /**
      * Scope for pending entries.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopePending($query)
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', PairingStatusEnum::PENDING);
     }
 
     /**
      * Scope for approved entries.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeApproved($query)
+    public function scopeApproved(Builder $query): Builder
     {
         return $query->where('status', PairingStatusEnum::APPROVED);
     }
 
     /**
      * Scope for specific channel.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeForChannel($query, ChannelEnum $channel)
+    public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
     }
@@ -193,6 +207,12 @@ class PairingEntry extends Model
 
     /**
      * Ensure sender is paired, return check result.
+     *
+     * @return array{
+     *     approved: bool,
+     *     code: string|null,
+     *     isNewPending: bool
+     * }
      */
     public static function ensureSenderPaired(ChannelEnum $channel, string $senderId, string $sender): array
     {
@@ -208,7 +228,11 @@ class PairingEntry extends Model
                 $approved->update(['sender' => $sender]);
             }
 
-            return ['approved' => true];
+            return [
+                'approved' => true,
+                'code' => null,
+                'isNewPending' => false,
+            ];
         }
 
         // Find or create pending entry

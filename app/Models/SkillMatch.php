@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use App\DTOs\IntentClassificationDTO;
+use App\DTOs\IntentMappingDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
 use App\Services\Skills\SignatureGenerator;
 use App\Services\Skills\SkillMatchRepository;
 use App\Services\Skills\SkillMatchStatisticsService;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -27,23 +28,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property string $intent_signature MD5 hash of sorted keywords
- * @property array $intent_keywords Extracted keywords from message
+ * @property array<int, string> $intent_keywords Extracted keywords from message
  * @property int $skill_id Foreign key to laraclaw_skills table
  * @property float $confidence_score Confidence score (0.00 to 1.00)
  * @property string|null $sample_message Original message sample
  * @property int $hit_count Usage tracking
  * @property string|null $intent_category Intent category
- * @property array|null $entities Extracted entities
+ * @property array<string, mixed>|null $entities Extracted entities
  * @property string|null $suggested_agent Agent suggestion
- * @property array|null $metadata Additional metadata
+ * @property array<string, mixed>|null $metadata Additional metadata
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read Skill $skill The matched skill
  */
 class SkillMatch extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'intent_signature',
         'intent_keywords',
@@ -79,6 +78,8 @@ class SkillMatch extends Model
 
     /**
      * Get the skill this match belongs to.
+     *
+     * @return BelongsTo<Skill, $this>
      */
     public function skill(): BelongsTo
     {
@@ -87,6 +88,8 @@ class SkillMatch extends Model
 
     /**
      * Get the suggested agent for this cache entry.
+     *
+     * @return BelongsTo<Agent, $this>
      */
     public function suggestedAgent(): BelongsTo
     {
@@ -97,62 +100,135 @@ class SkillMatch extends Model
     // Query Scopes
     // ==========================================
 
-    public function scopeBySignature($query, string $signature)
+    /**
+     * Scope by intent signature.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeBySignature(Builder $query, string $signature): Builder
     {
         return $query->where('intent_signature', $signature);
     }
 
-    public function scopeForSkill($query, int $skillId)
+    /**
+     * Scope for a specific skill.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForSkill(Builder $query, int $skillId): Builder
     {
         return $query->where('skill_id', $skillId);
     }
 
-    public function scopeForSkillName($query, string $skillName)
+    /**
+     * Scope for a specific skill name.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForSkillName(Builder $query, string $skillName): Builder
     {
         return $query->whereHas('skill', fn ($q) => $q->where('name', $skillName));
     }
 
-    public function scopeForCategory($query, string $category)
+    /**
+     * Scope for a specific category.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForCategory(Builder $query, string $category): Builder
     {
         return $query->where('intent_category', $category);
     }
 
-    public function scopeMinConfidence($query, float $minConfidence)
+    /**
+     * Scope for minimum confidence.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeMinConfidence(Builder $query, float $minConfidence): Builder
     {
         return $query->where('confidence_score', '>=', $minConfidence);
     }
 
-    public function scopeHighConfidence($query)
+    /**
+     * Scope for high confidence matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeHighConfidence(Builder $query): Builder
     {
         return $query->where('confidence_score', '>=', 0.8);
     }
 
-    public function scopeMediumConfidence($query)
+    /**
+     * Scope for medium confidence matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeMediumConfidence(Builder $query): Builder
     {
         return $query->where('confidence_score', '>=', 0.5);
     }
 
-    public function scopePopular($query)
+    /**
+     * Scope for popular matches by hit count.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopePopular(Builder $query): Builder
     {
         return $query->orderByDesc('hit_count');
     }
 
-    public function scopeByConfidence($query, string $direction = 'desc')
+    /**
+     * Scope ordered by confidence.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeByConfidence(Builder $query, string $direction = 'desc'): Builder
     {
         return $query->orderBy('confidence_score', $direction);
     }
 
-    public function scopeForAgent($query, string $agentId)
+    /**
+     * Scope for a specific agent.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForAgent(Builder $query, string $agentId): Builder
     {
         return $query->where('suggested_agent', $agentId);
     }
 
-    public function scopeWithKeyword($query, string $keyword)
+    /**
+     * Scope containing a specific keyword.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeWithKeyword(Builder $query, string $keyword): Builder
     {
         return $query->whereJsonContains('intent_keywords', $keyword);
     }
 
-    public function scopeWithAnyKeyword($query, array $keywords)
+    /**
+     * Scope containing any of the given keywords.
+     *
+     * @param  Builder<self>  $query
+     * @param  array<int, string>  $keywords
+     * @return Builder<self>
+     */
+    public function scopeWithAnyKeyword(Builder $query, array $keywords): Builder
     {
         return $query->where(function ($q) use ($keywords) {
             foreach ($keywords as $keyword) {
@@ -161,12 +237,24 @@ class SkillMatch extends Model
         });
     }
 
-    public function scopeRecent($query, int $days = 7)
+    /**
+     * Scope for recent matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    public function scopeFrequent($query, int $minHits = 5)
+    /**
+     * Scope for frequent matches.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeFrequent(Builder $query, int $minHits = 5): Builder
     {
         return $query->where('hit_count', '>=', $minHits);
     }
@@ -191,7 +279,7 @@ class SkillMatch extends Model
         return new IntentClassificationDTO(
             intent: $this->intent_category ?? 'unknown',
             confidence: $this->confidence_score,
-            matchedSkill: $this->skill?->name ?? 'unknown',
+            matchedSkill: $this->skill->name ?? 'unknown',
             entities: $this->entities ?? [],
             suggestedAgent: $this->suggested_agent,
             method: 'cache_hit',
@@ -222,6 +310,8 @@ class SkillMatch extends Model
 
     /**
      * Generate a normalized signature from keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public static function generateSignature(array $keywords): string
     {
@@ -238,6 +328,8 @@ class SkillMatch extends Model
 
     /**
      * Find a cache entry by keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public static function findByKeywords(array $keywords): ?self
     {
@@ -246,6 +338,8 @@ class SkillMatch extends Model
 
     /**
      * Find similar entries by keyword overlap.
+     *
+     * @param  array<int, string>  $keywords
      */
     public static function findSimilar(array $keywords, float $minConfidence = 0.7): ?self
     {
@@ -254,25 +348,24 @@ class SkillMatch extends Model
 
     /**
      * Store a new cache entry or update existing.
+     *
+     * @param  array<string, mixed>|null  $entities
+     * @param  array<string, mixed>|null  $metadata
      */
     public static function storeMatch(
-        array $keywords,
-        int $skillId,
-        float $confidence,
-        ?string $category = null,
+        IntentMappingDTO $intentMapping,
         ?array $entities = null,
         ?string $agent = null,
-        ?string $sampleMessage = null,
         ?array $metadata = null
     ): self {
         return static::repository()->storeMatch(
-            keywords: $keywords,
-            skillId: $skillId,
-            confidence: $confidence,
-            category: $category,
+            keywords: $intentMapping->keywords,
+            skillId: $intentMapping->skillId,
+            confidence: $intentMapping->confidence,
+            category: $intentMapping->category,
             entities: $entities,
             agent: $agent,
-            sampleMessage: $sampleMessage,
+            sampleMessage: $intentMapping->sampleIntent,
             metadata: $metadata
         );
     }
@@ -280,8 +373,13 @@ class SkillMatch extends Model
     /**
      * Store a match by skill name (convenience method).
      *
+     * @param  array<int, string>  $keywords
+     * @param  array<string, mixed>|null  $entities
+     * @param  array<string, mixed>|null  $metadata
+     *
      * @throws \InvalidArgumentException If skill not found
      */
+    // FIXME: convert to DTO
     public static function storeMatchBySkillName(
         array $keywords,
         string $skillName,

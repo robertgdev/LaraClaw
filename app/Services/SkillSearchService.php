@@ -2,10 +2,18 @@
 
 namespace App\Services;
 
+use App\DTOs\ParsedSkillDTO;
+use App\DTOs\SkillDTO;
+use App\DTOs\SkillFileDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
+use App\DTOs\SkillSearchResultDTO;
 use App\Services\Skills\SkillFileParser;
 use App\Services\Skills\SkillIndexer;
 use App\Services\Skills\SkillMatchCache;
+use App\TypedCollections\ParsedSkillDTOCollection;
+use App\TypedCollections\SkillDTOCollection;
+use App\TypedCollections\SkillFileDTOCollection;
+use App\TypedCollections\SkillSearchResultDTOCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
@@ -26,7 +34,7 @@ class SkillSearchService
 
     protected SkillMatchCache $matchCache;
 
-    protected array $skillIndex = [];
+    protected ParsedSkillDTOCollection $skillIndex;
 
     public function __construct(SettingsService $settings, ?SkillIndexer $indexer = null, ?SkillFileParser $parser = null, ?SkillMatchCache $matchCache = null)
     {
@@ -39,7 +47,7 @@ class SkillSearchService
     /**
      * Index all skills from all directories (respecting priority order).
      */
-    public function indexSkills(): array
+    public function indexSkills(): ParsedSkillDTOCollection
     {
         $this->skillIndex = $this->indexer->indexSkills();
 
@@ -50,7 +58,7 @@ class SkillSearchService
      * Parse a SKILL.md file and extract metadata.
      * Delegates to SkillFileParser.
      */
-    protected function parseSkillFile(string $path): ?array
+    protected function parseSkillFile(string $path): ?ParsedSkillDTO
     {
         return $this->parser->parse($path);
     }
@@ -58,6 +66,8 @@ class SkillSearchService
     /**
      * Extract keywords from text.
      * Delegates to the shared KeywordExtractor utility.
+     *
+     * @return array<string>
      */
     protected function extractKeywords(string $text): array
     {
@@ -67,29 +77,29 @@ class SkillSearchService
     /**
      * Search for skills matching a query.
      */
-    public function search(string $query, int $limit = 5): array
+    public function search(string $query, int $limit = 5): SkillSearchResultDTOCollection
     {
-        if (empty($this->skillIndex)) {
+        if (! isset($this->skillIndex)) {
             $this->indexSkills();
         }
 
         $queryKeywords = $this->extractKeywords($query);
         $results = [];
 
-        foreach ($this->skillIndex as $skillName => $skill) {
+        foreach ($this->skillIndex as $skill) {
             $score = 0;
             $matchedKeywords = [];
 
             // Calculate keyword overlap
             foreach ($queryKeywords as $keyword) {
-                if (in_array($keyword, $skill['keywords'])) {
+                if (in_array($keyword, $skill->keywords)) {
                     $score += 2;
                     $matchedKeywords[] = $keyword;
                 }
             }
 
             // Check description for query terms
-            $descLower = strtolower($skill['description']);
+            $descLower = strtolower($skill->description);
             foreach ($queryKeywords as $keyword) {
                 if (str_contains($descLower, $keyword)) {
                     $score += 1;
@@ -97,57 +107,64 @@ class SkillSearchService
             }
 
             // Direct name match
-            if (str_contains(strtolower($skillName), strtolower($query))) {
+            if (str_contains(strtolower($skill->name), strtolower($query))) {
                 $score += 5;
             }
 
             if ($score > 0) {
-                $results[] = [
-                    'skill' => $skill,
-                    'score' => $score,
-                    'matched_keywords' => $matchedKeywords,
-                ];
+                $results[] = new SkillSearchResultDTO(
+                    skill: $skill->toSkillDTO(),
+                    score: $score,
+                    matchedKeywords: $matchedKeywords,
+                );
             }
         }
 
-        // Sort by score descending
-        usort($results, fn ($a, $b) => $b['score'] <=> $a['score']);
+        // Sort by score descending and limit
+        usort($results, fn ($a, $b) => $b->score <=> $a->score);
+        $results = array_slice($results, 0, $limit);
 
-        return array_slice($results, 0, $limit);
+        return new SkillSearchResultDTOCollection($results);
     }
 
     /**
      * Find the best matching skill for a query.
      */
-    public function findBestMatch(string $query): ?array
+    public function findBestMatch(string $query): ?SkillSearchResultDTO
     {
         $results = $this->search($query, 1);
 
-        return $results[0] ?? null;
+        return $results->first();
     }
 
     /**
      * Get all indexed skills.
      */
-    public function getAllSkills(): array
+    public function getAllSkills(): SkillDTOCollection
     {
-        if (empty($this->skillIndex)) {
+        if (! isset($this->skillIndex)) {
             $this->indexSkills();
         }
 
-        return $this->skillIndex;
+        $skills = $this->skillIndex->map(
+            fn (ParsedSkillDTO $skill) => $skill->toSkillDTO()
+        );
+
+        return new SkillDTOCollection($skills->values()->all());
     }
 
     /**
      * Get a specific skill by name.
      */
-    public function getSkill(string $name): ?array
+    public function getSkill(string $name): ?SkillDTO
     {
-        if (empty($this->skillIndex)) {
+        if (! isset($this->skillIndex)) {
             $this->indexSkills();
         }
 
-        return $this->skillIndex[$name] ?? null;
+        $parsed = $this->skillIndex->findByName($name);
+
+        return $parsed?->toSkillDTO();
     }
 
     /**
@@ -160,53 +177,56 @@ class SkillSearchService
             return null;
         }
 
-        return File::get($skill['path']);
+        return File::get($skill->path);
     }
 
     /**
      * Get reference files for a skill.
      */
-    public function getSkillReferences(string $name): array
+    public function getSkillReferences(string $name): SkillFileDTOCollection
     {
         $skill = $this->getSkill($name);
-        if (! $skill || ! $skill['has_references']) {
-            return [];
+        if (! $skill || ! $skill->hasReferences) {
+            return new SkillFileDTOCollection([]);
         }
 
-        $refDir = $skill['directory'].'/references';
+        $refDir = $skill->directory.'/references';
         $files = File::files($refDir);
 
-        return array_map(fn ($f) => [
-            'name' => $f->getFilename(),
-            'path' => $f->getPathname(),
-        ], $files);
+        $dtos = array_map(fn ($f) => new SkillFileDTO(
+            name: $f->getFilename(),
+            path: $f->getPathname(),
+        ), $files);
+
+        return new SkillFileDTOCollection($dtos);
     }
 
     /**
      * Get scripts for a skill.
      */
-    public function getSkillScripts(string $name): array
+    public function getSkillScripts(string $name): SkillFileDTOCollection
     {
         $skill = $this->getSkill($name);
-        if (! $skill || ! $skill['has_scripts']) {
-            return [];
+        if (! $skill || ! $skill->hasScripts) {
+            return new SkillFileDTOCollection([]);
         }
 
-        $scriptsDir = $skill['directory'].'/scripts';
+        $scriptsDir = $skill->directory.'/scripts';
         $files = File::files($scriptsDir);
 
-        return array_map(fn ($f) => [
-            'name' => $f->getFilename(),
-            'path' => $f->getPathname(),
-        ], $files);
+        $dtos = array_map(fn ($f) => new SkillFileDTO(
+            name: $f->getFilename(),
+            path: $f->getPathname(),
+        ), $files);
+
+        return new SkillFileDTOCollection($dtos);
     }
 
     /**
      * Refresh the skill index.
      */
-    public function refreshIndex(): array
+    public function refreshIndex(): ParsedSkillDTOCollection
     {
-        $this->skillIndex = [];
         $this->skillIndex = $this->indexer->refreshIndex();
 
         return $this->skillIndex;
@@ -214,6 +234,8 @@ class SkillSearchService
 
     /**
      * Get skills directories (all configured directories).
+     *
+     * @return array<array{type: string, path: string}>
      */
     public function getSkillsDirs(): array
     {
@@ -231,8 +253,11 @@ class SkillSearchService
     /**
      * Suggest skills based on message intent and content.
      * Uses cache for faster lookups on repeated similar queries.
+     *
+     * @param  string  $message  The message to analyze
+     * @param  array<string, mixed>  $context  Additional context for matching
      */
-    public function suggestSkillsForMessage(string $message, array $context = []): array
+    public function suggestSkillsForMessage(string $message, array $context = []): SkillSearchResultDTOCollection
     {
         // Extract keywords for cache lookup
         $keywords = $this->extractKeywords($message);
@@ -249,36 +274,47 @@ class SkillSearchService
 
         // Add context-based boosting
         if (! empty($context['intent'])) {
-            foreach ($results as &$result) {
-                if (str_contains(strtolower($result['skill']['description']), $context['intent'])) {
-                    $result['score'] += 2;
+            $boostedResults = [];
+            foreach ($results as $result) {
+                if (str_contains(strtolower($result->skill->description), $context['intent'])) {
+                    $boostedResults[] = new SkillSearchResultDTO(
+                        skill: $result->skill,
+                        score: $result->score + 2,
+                        matchedKeywords: $result->matchedKeywords,
+                        fromCache: $result->fromCache,
+                        cacheHitId: $result->cacheHitId,
+                    );
+                } else {
+                    $boostedResults[] = $result;
                 }
             }
-            unset($result);
+            $results = new SkillSearchResultDTOCollection($boostedResults);
         }
 
-        // Re-sort after boosting
-        usort($results, fn ($a, $b) => $b['score'] <=> $a['score']);
-
-        $results = array_slice($results, 0, 5);
+        // Re-sort after boosting and limit
+        $sorted = $results->sortByDesc('score')->take(5)->values();
 
         // Store the best match in cache for future lookups
-        if (! empty($results) && $results[0]['score'] > 0) {
-            $this->matchCache->store($keywords, $results[0], $message, $context);
+        $bestMatch = $sorted->first();
+        if ($bestMatch && $bestMatch->score > 0) {
+            $this->matchCache->store($keywords, $bestMatch, $message, $context);
         }
 
-        return $results;
+        return new SkillSearchResultDTOCollection($sorted->all());
     }
 
     /**
      * Find skill by message with cache-first lookup.
      * Returns the best matching skill or null.
+     *
+     * @param  string  $message  The message to analyze
+     * @param  array<string, mixed>  $context  Additional context for matching
      */
-    public function findSkillForMessage(string $message, array $context = []): ?array
+    public function findSkillForMessage(string $message, array $context = []): ?SkillSearchResultDTO
     {
         $results = $this->suggestSkillsForMessage($message, $context);
 
-        return $results[0] ?? null;
+        return $results->first();
     }
 
     /**

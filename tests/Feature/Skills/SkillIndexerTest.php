@@ -3,6 +3,7 @@
 use App\Services\SettingsService;
 use App\Services\Skills\SkillFileParser;
 use App\Services\Skills\SkillIndexer;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\Cache;
 
 beforeEach(function () {
@@ -20,21 +21,22 @@ describe('SkillIndexer', function () {
             // Second call should hit cache
             $second = $this->indexer->indexSkills();
 
-            expect($second)->toBe($first);
+            // Both should have the same skill names
+            expect($second->getNames())->toBe($first->getNames());
         });
 
         it('indexes skills from directories', function () {
             $result = $this->indexer->refreshIndex();
 
-            expect($result)->toBeArray();
-            // Each skill should have required keys
-            foreach ($result as $name => $skill) {
-                expect($skill)
-                    ->toHaveKey('name')
-                    ->toHaveKey('description')
-                    ->toHaveKey('path')
-                    ->toHaveKey('directory')
-                    ->toHaveKey('keywords');
+            expect($result)->toBeInstanceOf(ParsedSkillDTOCollection::class);
+            // Each skill should be a ParsedSkillDTO
+            foreach ($result as $skill) {
+                expect($skill)->toBeInstanceOf(\App\DTOs\ParsedSkillDTO::class)
+                    ->and($skill->name)->toBeString()
+                    ->and($skill->description)->toBeString()
+                    ->and($skill->path)->toBeString()
+                    ->and($skill->dirName)->toBeString()
+                    ->and($skill->keywords)->toBeArray();
             }
         });
     });
@@ -47,7 +49,7 @@ describe('SkillIndexer', function () {
             // Refresh should clear cache
             $result = $this->indexer->refreshIndex();
 
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(ParsedSkillDTOCollection::class);
         });
     });
 
@@ -89,7 +91,8 @@ describe('SkillIndexer', function () {
             $result = $indexer->refreshIndex();
 
             // With a parser that always returns null, we should get empty index
-            expect($result)->toBeArray();
+            expect($result)->toBeInstanceOf(ParsedSkillDTOCollection::class)
+                ->and($result->isEmpty())->toBeTrue();
         });
     });
 });

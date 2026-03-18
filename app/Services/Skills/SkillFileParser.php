@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\ParsedSkillDTO;
 use App\Services\KeywordExtractor;
 use Illuminate\Support\Facades\File;
 
@@ -22,9 +23,8 @@ class SkillFileParser
      * Parse a SKILL.md file and extract metadata.
      *
      * @param  string  $path  Full path to the SKILL.md file
-     * @return array|null Parsed skill data or null if invalid
      */
-    public function parse(string $path): ?array
+    public function parse(string $path): ?ParsedSkillDTO
     {
         $content = File::get($path);
 
@@ -60,17 +60,17 @@ class SkillFileParser
         // Get skill directory name
         $dirName = basename(dirname($path));
 
-        return [
-            'name' => $metadata['name'],
-            'dir_name' => $dirName,
-            'description' => $metadata['description'],
-            'license' => $metadata['license'] ?? null,
-            'path' => $path,
-            'directory' => dirname($path),
-            'keywords' => $keywords,
-            'has_scripts' => File::isDirectory(dirname($path).'/scripts'),
-            'has_references' => File::isDirectory(dirname($path).'/references'),
-            'has_assets' => File::isDirectory(dirname($path).'/assets'),
-        ];
+        return new ParsedSkillDTO(
+            name: $metadata['name'],
+            dirName: $dirName,
+            description: $metadata['description'],
+            path: $path,
+            directory: dirname($path),
+            keywords: $keywords,
+            hasScripts: File::isDirectory(dirname($path).'/scripts'),
+            hasReferences: File::isDirectory(dirname($path).'/references'),
+            hasAssets: File::isDirectory(dirname($path).'/assets'),
+            license: $metadata['license'] ?? null,
+        );
     }
 }

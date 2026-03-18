@@ -28,9 +28,10 @@ return [
     |
     */
     'scoring' => [
-        'fts_weight' => env('MEMORY_FTS_WEIGHT', 0.4),
-        'temporal_weight' => env('MEMORY_TEMPORAL_WEIGHT', 0.3),
-        'importance_weight' => env('MEMORY_IMPORTANCE_WEIGHT', 0.3),
+        'fts_weight' => env('MEMORY_FTS_WEIGHT', 0.35),
+        'temporal_weight' => env('MEMORY_TEMPORAL_WEIGHT', 0.25),
+        'importance_weight' => env('MEMORY_IMPORTANCE_WEIGHT', 0.20),
+        'feedback_weight' => env('MEMORY_FEEDBACK_WEIGHT', 0.25),
     ],
 
     /*

@@ -21,6 +21,8 @@ class SignatureGenerator
 
     /**
      * Generate a normalized signature from keywords.
+     *
+     * @param  array<int, string>  $keywords
      */
     public function generate(array $keywords): string
     {
@@ -32,7 +34,8 @@ class SignatureGenerator
     /**
      * Normalize keywords: lowercase, sort, limit.
      *
-     * @return array<string>
+     * @param  array<int, string>  $keywords
+     * @return array<int, string>
      */
     public function normalize(array $keywords): array
     {

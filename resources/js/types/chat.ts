@@ -31,6 +31,9 @@ export type ThinkingContent = {
 
 export type MessageContent = TextContent | ToolCallContent | ThinkingContent;
 
+// Feedback type: -1 = negative, 0 = neutral, 1 = positive
+export type FeedbackValue = -1 | 0 | 1;
+
 export type GatewayMessage = {
     role?: string;
     content?: MessageContent[];
@@ -45,6 +48,9 @@ export type GatewayMessage = {
     id?: string;
     clientId?: string;
     status?: 'sending' | 'error' | 'sent';
+    messageId?: string;
+    feedback?: FeedbackValue;
+    feedbackComment?: string;
 };
 
 export type SessionSummary = {
@@ -57,6 +63,8 @@ export type SessionSummary = {
     friendlyId?: string;
     totalTokens?: number;
     contextTokens?: number;
+    feedback?: FeedbackValue;
+    feedbackComment?: string;
 };
 
 export type SessionListResponse = {
@@ -79,6 +87,8 @@ export type SessionMeta = {
     lastMessage?: GatewayMessage | null;
     totalTokens?: number;
     contextTokens?: number;
+    feedback?: FeedbackValue;
+    feedbackComment?: string;
 };
 
 export type PathsPayload = {
@@ -127,4 +137,31 @@ export type ChatUiState = {
 export type GatewayStatusResponse = {
     ok: boolean;
     error?: string;
+};
+
+// Feedback message types for WebSocket
+export type MessageFeedbackPayload = {
+    type: 'feedback_message';
+    message_id: string;
+    feedback: FeedbackValue;
+    comment?: string;
+};
+
+export type ConversationFeedbackPayload = {
+    type: 'feedback_conversation';
+    conversation_id: string;
+    feedback: FeedbackValue;
+    comment?: string;
+};
+
+export type FeedbackResponse = {
+    type: 'feedback_message_saved' | 'feedback_conversation_saved';
+    message: string;
+    data: {
+        success: boolean;
+        message_id?: string;
+        conversation_id?: string;
+        feedback: FeedbackValue;
+        feedback_label: string;
+    };
 };

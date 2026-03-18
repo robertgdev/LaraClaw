@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Enums\ChannelEnum;
+use App\Enums\FeedbackEnum;
 use App\Enums\MessageStatusEnum;
+use App\Logging\MultiLogger;
 use App\Services\Conversation\ConversationSearchService;
 use App\Services\Conversation\ConversationSessionManager;
 use Database\Factories\ConversationFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,6 +27,7 @@ use Laravel\Scout\Searchable;
  * - derived_title: Auto-generated from first message
  * - is_active: Currently active session for this sender_id+channel
  * - is_pinned: Pinned sessions appear at top
+ * - feedback: User feedback for the entire conversation (positive, negative, neutral)
  *
  * Session lifecycle management is handled by ConversationSessionManager.
  * Search logic is handled by ConversationSearchService.
@@ -48,6 +52,9 @@ class Conversation extends Model
         'started_at',
         'last_message_at',
         'completed_at',
+        'feedback',
+        'feedback_comment',
+        'feedback_at',
     ];
 
     protected $casts = [
@@ -57,6 +64,8 @@ class Conversation extends Model
         'started_at' => 'datetime',
         'last_message_at' => 'datetime',
         'completed_at' => 'datetime',
+        'feedback' => FeedbackEnum::class,
+        'feedback_at' => 'datetime',
     ];
 
     // ==========================================
@@ -65,6 +74,8 @@ class Conversation extends Model
 
     /**
      * Get the team this conversation belongs to.
+     *
+     * @return BelongsTo<Team, $this>
      */
     public function team(): BelongsTo
     {
@@ -73,6 +84,8 @@ class Conversation extends Model
 
     /**
      * Get all messages for this conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function messages(): HasMany
     {
@@ -80,7 +93,29 @@ class Conversation extends Model
     }
 
     /**
+     * Get context items for lossless memory.
+     *
+     * @return HasMany<MemoryContextItem, $this>
+     */
+    public function contextItems(): HasMany
+    {
+        return $this->hasMany(MemoryContextItem::class, 'conversation_id', 'id');
+    }
+
+    /**
+     * Get summaries for lossless memory.
+     *
+     * @return HasMany<MemorySummary, $this>
+     */
+    public function summaries(): HasMany
+    {
+        return $this->hasMany(MemorySummary::class, 'conversation_id', 'id');
+    }
+
+    /**
      * Get incoming messages for this conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function incomingMessages(): HasMany
     {
@@ -89,6 +124,8 @@ class Conversation extends Model
 
     /**
      * Get outgoing messages for this conversation.
+     *
+     * @return HasMany<ConversationMessage, $this>
      */
     public function outgoingMessages(): HasMany
     {
@@ -111,39 +148,100 @@ class Conversation extends Model
     // Scopes
     // ==========================================
 
-    public function scopeForChannel($query, ChannelEnum $channel)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
     }
 
-    public function scopeForTeam($query, ?string $teamId)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForTeam(Builder $query, ?string $teamId): Builder
     {
         return $query->where('team_id', $teamId);
     }
 
-    public function scopeCompleted($query)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeCompleted(Builder $query): Builder
     {
         return $query->whereNotNull('completed_at');
     }
 
-    public function scopeRecent($query, int $days = 7)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeRecent(Builder $query, int $days = 7): Builder
     {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    public function scopeActive($query)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
-    public function scopePinned($query)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopePinned(Builder $query): Builder
     {
         return $query->where('is_pinned', true);
     }
 
-    public function scopeForSender($query, string $senderId, ChannelEnum $channel)
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForSender(Builder $query, string $senderId, ChannelEnum $channel): Builder
     {
         return $query->where('sender_id', $senderId)->where('channel', $channel);
+    }
+
+    /**
+     * Scope for conversations with positive feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopePositiveFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::POSITIVE);
+    }
+
+    /**
+     * Scope for conversations with negative feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeNegativeFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::NEGATIVE);
+    }
+
+    /**
+     * Scope for conversations with any feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeWithFeedback(Builder $query): Builder
+    {
+        return $query->whereNotNull('feedback');
     }
 
     // ==========================================
@@ -152,6 +250,8 @@ class Conversation extends Model
 
     /**
      * Create a new conversation with metadata.
+     *
+     * @param  array<string, mixed>  $data
      */
     public static function createNew(array $data): self
     {
@@ -213,6 +313,8 @@ class Conversation extends Model
     /**
      * Start a new session for a sender.
      * Deactivates all other sessions for this sender+channel.
+     *
+     * @param  array<string, mixed>  $data
      */
     public static function startNewSession(array $data): self
     {
@@ -237,6 +339,8 @@ class Conversation extends Model
 
     /**
      * Get all sessions for a sender+channel.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, self>
      */
     public static function getSessionsForSender(string $senderId, ChannelEnum $channel, int $limit = 50)
     {
@@ -290,7 +394,27 @@ class Conversation extends Model
      */
     public function markCompleted(): void
     {
+        // DEBUG: Log when markCompleted is called
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+        $caller = $trace[1] ?? null;
+        MultiLogger::info('[DEBUG] Conversation::markCompleted() called', [
+            'conversation_id' => $this->conversation_id,
+            'id' => $this->id,
+            'completed_at_before' => $this->completed_at?->toIso8601String(),
+            'caller_file' => $caller['file'] ?? 'unknown',
+            'caller_line' => $caller['line'] ?? 'unknown',
+            'caller_class' => $caller['class'] ?? 'unknown',
+            'caller_function' => $caller['function'] ?? 'unknown',
+        ]);
+
         $this->update(['completed_at' => now()]);
+
+        // DEBUG: Log after update
+        $this->refresh();
+        MultiLogger::info('[DEBUG] Conversation::markCompleted() completed', [
+            'conversation_id' => $this->conversation_id,
+            'completed_at_after' => $this->completed_at?->toIso8601String(),
+        ]);
     }
 
     /**
@@ -303,12 +427,14 @@ class Conversation extends Model
 
     /**
      * Add a user message to this conversation.
+     *
+     * @param  array<int, string>  $files
      */
     public function addUserMessage(string $message, string $sender = 'user', ?string $senderId = null, array $files = []): ConversationMessage
     {
-        \Log::debug('[Conversation::addUserMessage] Creating message', [
+        MultiLogger::debug('[Conversation::addUserMessage] Creating message', [
             'conversation_id' => $this->conversation_id,
-            'channel' => $this->channel?->value,
+            'channel' => $this->channel->value,
             'sender' => $sender,
             'sender_id' => $senderId,
         ]);
@@ -322,7 +448,7 @@ class Conversation extends Model
             'files' => $files,
         ]);
 
-        \Log::debug('[Conversation::addUserMessage] Message created', [
+        MultiLogger::debug('[Conversation::addUserMessage] Message created', [
             'message_id' => $msg->id,
             'sender_id' => $msg->sender_id,
         ]);
@@ -360,15 +486,85 @@ class Conversation extends Model
      */
     public function getFirstUserMessage(): ?ConversationMessage
     {
+        /** @var ConversationMessage|null */
         return $this->incomingMessages()->orderBy('created_at')->first();
     }
 
     /**
      * Get all agent responses.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, ConversationMessage>
      */
-    public function getAgentResponses()
+    public function getAgentResponses(): \Illuminate\Database\Eloquent\Collection
     {
+        /** @var \Illuminate\Database\Eloquent\Collection<int, ConversationMessage> */
         return $this->outgoingMessages()->orderBy('created_at')->get();
+    }
+
+    // ==========================================
+    // Feedback Methods
+    // ==========================================
+
+    /**
+     * Set feedback for this conversation.
+     *
+     * Uses withoutTimestamps() so that recording feedback does not alter updated_at
+     * and therefore does not change the conversation's position in the sidebar list.
+     */
+    public function setFeedback(FeedbackEnum $feedback, ?string $comment = null): void
+    {
+        static::withoutTimestamps(function () use ($feedback, $comment) {
+            $this->update([
+                'feedback' => $feedback,
+                'feedback_comment' => $comment,
+                'feedback_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Check if this conversation has feedback.
+     */
+    public function hasFeedback(): bool
+    {
+        return $this->feedback !== null;
+    }
+
+    /**
+     * Check if this conversation has positive feedback.
+     */
+    public function hasPositiveFeedback(): bool
+    {
+        return $this->feedback?->isPositive() ?? false;
+    }
+
+    /**
+     * Check if this conversation has negative feedback.
+     */
+    public function hasNegativeFeedback(): bool
+    {
+        return $this->feedback?->isNegative() ?? false;
+    }
+
+    /**
+     * Get the average feedback score for messages in this conversation.
+     * Returns null if no messages have feedback.
+     */
+    public function getAverageMessageFeedback(): ?float
+    {
+        $messagesWithFeedback = $this->messages()->whereNotNull('feedback')->get();
+
+        if ($messagesWithFeedback->isEmpty()) {
+            return null;
+        }
+
+        /** @var \Illuminate\Support\Collection<int, ConversationMessage> $messagesWithFeedback */
+        $total = 0;
+        foreach ($messagesWithFeedback as $message) {
+            $total += $message->feedback->value;
+        }
+
+        return $total / $messagesWithFeedback->count();
     }
 
     // ==========================================
@@ -392,6 +588,7 @@ class Conversation extends Model
             'team_id' => $this->team_id,
             'first_message' => $firstMessage?->message,
             'created_at' => $this->created_at?->timestamp,
+            'feedback' => $this->feedback?->value,
         ];
     }
 
@@ -410,7 +607,7 @@ class Conversation extends Model
      * @param  string  $query  Search query
      * @param  int  $limit  Maximum results
      * @param  string|null  $teamId  Optional team filter
-     * @return \Illuminate\Database\Eloquent\Builder|\Laravel\Scout\Builder
+     * @return \Illuminate\Database\Eloquent\Builder<self>|\Laravel\Scout\Builder<self>
      */
     public static function searchConversations(string $query, int $limit = 20, ?string $teamId = null)
     {

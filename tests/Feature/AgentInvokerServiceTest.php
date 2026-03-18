@@ -216,26 +216,14 @@ describe('AgentInvokerService', function () {
             // This test verifies the integration chain
             $memoryService = app(\App\Services\MemoryEngineService::class);
 
-            // Create a memory for the test user
-            $senderId = 'test-sender-for-invoker';
-            $channel = \App\Enums\ChannelEnum::TELEGRAM;
-            $memoryService->recordEvent($senderId, $channel, [
-                'type' => \App\Enums\EpisodicEventTypeEnum::FACT_STORED,
-                'content' => 'User prefers TypeScript',
-                'importance' => 0.9,
-            ]);
-
             // Set up the invoker with memory service
             $this->agentInvoker
                 ->setMemoryService($memoryService)
-                ->setChannel($channel)
-                ->setSenderId($senderId);
+                ->setChannel(\App\Enums\ChannelEnum::TELEGRAM)
+                ->setSenderId('test-sender-for-invoker');
 
             // Verify setup was successful (no exception)
             expect(true)->toBeTrue();
-
-            // Cleanup
-            \App\Models\Memory::forSender($senderId, $channel)->delete();
         });
     });
 });

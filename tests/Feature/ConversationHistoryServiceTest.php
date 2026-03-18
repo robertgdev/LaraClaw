@@ -3,8 +3,10 @@
 use App\Enums\ChannelEnum;
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Models\MemoryContextItem;
 use App\Models\Team;
 use App\Services\ConversationHistoryService;
+use App\Services\MemoryEngineService;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -12,6 +14,7 @@ use Illuminate\Support\Str;
 beforeEach(function () {
     $this->settings = app(SettingsService::class);
     $this->conversationHistoryService = new ConversationHistoryService($this->settings);
+    $this->memoryService = app(MemoryEngineService::class);
 
     // Clean up conversations before each test
     Conversation::query()->delete();
@@ -115,6 +118,76 @@ describe('ConversationHistoryService', function () {
             $firstMessage = $conversation->getFirstUserMessage();
             expect($firstMessage)->not->toBeNull()
                 ->and($firstMessage->files)->toBe($files);
+        });
+
+        it('creates context items when memory service is injected', function () {
+            // Arrange
+            $channel = 'telegram';
+            $sender = 'John Doe';
+            $userMessage = 'Hello, how are you?';
+
+            // Create the agent first (required for foreign key)
+            Agent::createFromConfig('agent1', ['name' => 'Agent One']);
+
+            $responses = [
+                ['agentId' => 'agent1', 'agentName' => 'Agent One', 'response' => 'I am well!'],
+            ];
+
+            // Inject memory service
+            $this->conversationHistoryService->setMemoryService($this->memoryService);
+
+            // Act
+            $result = $this->conversationHistoryService->saveConversation(
+                $channel,
+                $sender,
+                $userMessage,
+                $responses
+            );
+
+            // Assert
+            expect($result)->toBeString();
+
+            $conversation = Conversation::where('conversation_id', $result)->first();
+            expect($conversation)->not->toBeNull();
+
+            // Verify context items were created (user message + agent response = 2)
+            $contextItems = MemoryContextItem::forConversation($conversation->id)->ordered()->get();
+            expect($contextItems)->toHaveCount(2)
+                ->and($contextItems[0]->item_type)->toBe('message')
+                ->and($contextItems[0]->ordinal)->toBe(0)
+                ->and($contextItems[1]->item_type)->toBe('message')
+                ->and($contextItems[1]->ordinal)->toBe(1);
+        });
+
+        it('does not create context items when memory service is not injected', function () {
+            // Arrange
+            $channel = 'telegram';
+            $sender = 'Jane Doe';
+            $userMessage = 'Hello!';
+
+            Agent::createFromConfig('agent2', ['name' => 'Agent Two']);
+
+            $responses = [
+                ['agentId' => 'agent2', 'agentName' => 'Agent Two', 'response' => 'Hi there!'],
+            ];
+
+            // Do NOT inject memory service
+
+            // Act
+            $result = $this->conversationHistoryService->saveConversation(
+                $channel,
+                $sender,
+                $userMessage,
+                $responses
+            );
+
+            // Assert
+            $conversation = Conversation::where('conversation_id', $result)->first();
+            expect($conversation)->not->toBeNull();
+
+            // Verify no context items were created
+            $contextItems = MemoryContextItem::forConversation($conversation->id)->get();
+            expect($contextItems)->toHaveCount(0);
         });
     });
 

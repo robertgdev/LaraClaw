@@ -2,9 +2,14 @@
 
 namespace App\Models;
 
+use App\DTOs\SkillClassificationStatsDTO;
+use App\DTOs\SkillFileDTO;
+use App\DTOs\SkillSyncResultDTO;
 use App\Services\Skills\SkillChecksumCalculator;
 use App\Services\Skills\SkillSyncService;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\TypedCollections\ParsedSkillDTOCollection;
+use App\TypedCollections\SkillFileDTOCollection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -36,7 +41,7 @@ use Illuminate\Support\Facades\File;
  * @property string|null $source_type Where skill comes from
  * @property string $description Skill description from SKILL.md
  * @property string|null $license License if specified
- * @property array|null $keywords Extracted keywords
+ * @property array<string>|null $keywords Extracted keywords
  * @property string $checksum SHA-256 hash of all skill files
  * @property bool $has_scripts Has scripts directory
  * @property bool $has_references Has references directory
@@ -48,14 +53,12 @@ use Illuminate\Support\Facades\File;
  * @property int $intents_count Number of intents generated
  * @property string|null $last_error Last classification error if any
  * @property bool $is_active Soft disable flag
- * @property array|null $metadata Extensible metadata
+ * @property array<string,string>|null $metadata Extensible metadata
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  */
 class Skill extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'name',
         'dir_name',
@@ -119,6 +122,8 @@ class Skill extends Model
 
     /**
      * Get all skill matches (intent mappings) for this skill.
+     *
+     * @return HasMany<SkillMatch, $this>
      */
     public function matches(): HasMany
     {
@@ -127,6 +132,8 @@ class Skill extends Model
 
     /**
      * Get the agents that have this skill assigned.
+     *
+     * @return BelongsToMany<Agent, $this>
      */
     public function agents(): BelongsToMany
     {
@@ -140,64 +147,88 @@ class Skill extends Model
 
     /**
      * Scope: Active skills only.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
     /**
      * Scope: Inactive skills only.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeInactive($query)
+    public function scopeInactive(Builder $query): Builder
     {
         return $query->where('is_active', false);
     }
 
     /**
      * Scope: Skills with a specific classification status.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeWithStatus($query, string $status)
+    public function scopeWithStatus(Builder $query, string $status): Builder
     {
         return $query->where('classification_status', $status);
     }
 
     /**
      * Scope: Pending classification.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopePending($query)
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('classification_status', self::STATUS_PENDING);
     }
 
     /**
      * Scope: Successfully classified.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeClassified($query)
+    public function scopeClassified(Builder $query): Builder
     {
         return $query->where('classification_status', self::STATUS_CLASSIFIED);
     }
 
     /**
      * Scope: Failed classification.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeFailed($query)
+    public function scopeFailed(Builder $query): Builder
     {
         return $query->where('classification_status', self::STATUS_FAILED);
     }
 
     /**
      * Scope: Skills needing classification (pending or failed).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeNeedsClassification($query)
+    public function scopeNeedsClassification(Builder $query): Builder
     {
         return $query->whereIn('classification_status', [self::STATUS_PENDING, self::STATUS_FAILED]);
     }
 
     /**
      * Scope: Skills with a specific checksum.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeWithChecksum($query, string $checksum)
+    public function scopeWithChecksum(Builder $query, string $checksum): Builder
     {
         return $query->where('checksum', $checksum);
     }
@@ -216,6 +247,8 @@ class Skill extends Model
 
     /**
      * Find or create a skill from indexed data.
+     *
+     * @param  array<string, mixed>  $skillData
      */
     public static function findOrCreateFromIndex(array $skillData, string $checksum): self
     {
@@ -266,10 +299,9 @@ class Skill extends Model
      * Sync skills from indexed data.
      * Creates new skills, updates existing ones, and marks removed skills as inactive.
      *
-     * @param  array  $indexedSkills  Skills from SkillSearchService::indexSkills()
-     * @return array{created: int, updated: int, deactivated: int}
+     * @param  \App\TypedCollections\ParsedSkillDTOCollection  $indexedSkills  Skills from SkillSearchService::indexSkills()
      */
-    public static function syncFromIndex(array $indexedSkills): array
+    public static function syncFromIndex(ParsedSkillDTOCollection $indexedSkills): SkillSyncResultDTO
     {
         /** @var SkillSyncService $syncService */
         $syncService = app(SkillSyncService::class);
@@ -279,6 +311,8 @@ class Skill extends Model
 
     /**
      * Get skills that need classification (checksum changed or never classified).
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, self>
      */
     public static function getSkillsNeedingClassification(): \Illuminate\Database\Eloquent\Collection
     {
@@ -290,15 +324,15 @@ class Skill extends Model
     /**
      * Get classification statistics.
      */
-    public static function getClassificationStats(): array
+    public static function getClassificationStats(): SkillClassificationStatsDTO
     {
-        return [
-            'total' => self::active()->count(),
-            'pending' => self::active()->pending()->count(),
-            'classified' => self::active()->classified()->count(),
-            'failed' => self::active()->failed()->count(),
-            'total_intents' => self::active()->sum('intents_count'),
-        ];
+        return new SkillClassificationStatsDTO(
+            total: self::active()->count(),
+            pending: self::active()->pending()->count(),
+            classified: self::active()->classified()->count(),
+            failed: self::active()->failed()->count(),
+            totalIntents: self::active()->sum('intents_count'),
+        );
     }
 
     // ==========================================
@@ -387,47 +421,51 @@ class Skill extends Model
     /**
      * Get reference files for this skill.
      */
-    public function getReferences(): array
+    public function getReferences(): SkillFileDTOCollection
     {
         if (! $this->has_references) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $refDir = $this->path.'/references';
 
         if (! File::isDirectory($refDir)) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $files = File::files($refDir);
 
-        return array_map(fn ($f) => [
-            'name' => $f->getFilename(),
-            'path' => $f->getPathname(),
-        ], $files);
+        $dtos = array_map(fn ($f) => new SkillFileDTO(
+            name: $f->getFilename(),
+            path: $f->getPathname(),
+        ), $files);
+
+        return new SkillFileDTOCollection($dtos);
     }
 
     /**
      * Get scripts for this skill.
      */
-    public function getScripts(): array
+    public function getScripts(): SkillFileDTOCollection
     {
         if (! $this->has_scripts) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $scriptsDir = $this->path.'/scripts';
 
         if (! File::isDirectory($scriptsDir)) {
-            return [];
+            return new SkillFileDTOCollection([]);
         }
 
         $files = File::files($scriptsDir);
 
-        return array_map(fn ($f) => [
-            'name' => $f->getFilename(),
-            'path' => $f->getPathname(),
-        ], $files);
+        $dtos = array_map(fn ($f) => new SkillFileDTO(
+            name: $f->getFilename(),
+            path: $f->getPathname(),
+        ), $files);
+
+        return new SkillFileDTOCollection($dtos);
     }
 
     /**

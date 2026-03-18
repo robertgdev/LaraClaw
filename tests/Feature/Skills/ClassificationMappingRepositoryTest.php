@@ -1,8 +1,10 @@
 <?php
 
+use App\DTOs\IntentMappingDTO;
 use App\Models\Skill;
 use App\Models\SkillMatch;
 use App\Services\Skills\ClassificationMappingRepository;
+use App\TypedCollections\IntentMappingDTOCollection;
 
 beforeEach(function () {
     $this->repository = new ClassificationMappingRepository;
@@ -27,15 +29,15 @@ describe('ClassificationMappingRepository', function () {
                 'checksum' => 'abc123',
             ]);
 
-            $mappings = [
-                [
-                    'sample_intent' => 'Generate an image',
-                    'keywords' => ['generate', 'image'],
-                    'skill_id' => $skill->id,
-                    'confidence' => 0.95,
-                    'category' => 'creative',
-                ],
-            ];
+            $mappings = new IntentMappingDTOCollection([
+                new IntentMappingDTO(
+                    sampleIntent: 'Generate an image',
+                    keywords: ['generate', 'image'],
+                    skillId: $skill->id,
+                    confidence: 0.95,
+                    category: 'creative',
+                ),
+            ]);
 
             $stored = $this->repository->storeMappings($mappings);
 
@@ -54,26 +56,27 @@ describe('ClassificationMappingRepository', function () {
             ]);
 
             // Store initial mapping
-            SkillMatch::storeMatch(
+            $oldMapping = new IntentMappingDTO(
+                sampleIntent: 'Old mapping',
                 keywords: ['old'],
                 skillId: $skill->id,
                 confidence: 0.8,
-                sampleMessage: 'Old mapping',
-                metadata: ['source' => 'preclassification']
+                category: 'test',
             );
+            SkillMatch::storeMatch($oldMapping, metadata: ['source' => 'preclassification']);
 
             expect(SkillMatch::count())->toBe(1);
 
             // Store new mappings (should clear old ones)
-            $mappings = [
-                [
-                    'sample_intent' => 'New mapping',
-                    'keywords' => ['new'],
-                    'skill_id' => $skill->id,
-                    'confidence' => 0.9,
-                    'category' => 'test',
-                ],
-            ];
+            $mappings = new IntentMappingDTOCollection([
+                new IntentMappingDTO(
+                    sampleIntent: 'New mapping',
+                    keywords: ['new'],
+                    skillId: $skill->id,
+                    confidence: 0.9,
+                    category: 'test',
+                ),
+            ]);
 
             $stored = $this->repository->storeMappings($mappings);
 
@@ -82,15 +85,21 @@ describe('ClassificationMappingRepository', function () {
         });
 
         it('handles empty mappings', function () {
-            $stored = $this->repository->storeMappings([]);
+            $stored = $this->repository->storeMappings(new IntentMappingDTOCollection([]));
 
             expect($stored)->toBe(0);
         });
 
         it('skips mappings without skill_id', function () {
-            $stored = $this->repository->storeMappings([
-                ['sample_intent' => 'No skill', 'keywords' => ['test'], 'confidence' => 0.9, 'category' => 'test'],
-            ]);
+            $stored = $this->repository->storeMappings(new IntentMappingDTOCollection([
+                new IntentMappingDTO(
+                    sampleIntent: 'No skill',
+                    keywords: ['test'],
+                    skillId: null,
+                    confidence: 0.9,
+                    category: 'test',
+                ),
+            ]));
 
             expect($stored)->toBe(0);
         });
@@ -105,10 +114,22 @@ describe('ClassificationMappingRepository', function () {
                 'source_type' => 'core', 'description' => 'S2', 'checksum' => 'c2',
             ]);
 
-            $mappings = [
-                ['sample_intent' => 'For skill 1', 'keywords' => ['s1'], 'skill_id' => $skill1->id, 'confidence' => 0.9, 'category' => 'test'],
-                ['sample_intent' => 'For skill 2', 'keywords' => ['s2'], 'skill_id' => $skill2->id, 'confidence' => 0.8, 'category' => 'test'],
-            ];
+            $mappings = new IntentMappingDTOCollection([
+                new IntentMappingDTO(
+                    sampleIntent: 'For skill 1',
+                    keywords: ['s1'],
+                    skillId: $skill1->id,
+                    confidence: 0.9,
+                    category: 'test',
+                ),
+                new IntentMappingDTO(
+                    sampleIntent: 'For skill 2',
+                    keywords: ['s2'],
+                    skillId: $skill2->id,
+                    confidence: 0.8,
+                    category: 'test',
+                ),
+            ]);
 
             $stored = $this->repository->storeMappings($mappings);
 

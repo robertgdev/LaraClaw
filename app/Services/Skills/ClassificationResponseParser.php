@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\Skills;
 
+use App\DTOs\IntentMappingDTO;
 use App\Logging\MultiLogger;
+use App\TypedCollections\IntentMappingDTOCollection;
 
 use function Safe\json_decode;
+use function Safe\preg_match;
 
 /**
  * Parses LLM responses for skill classification.
@@ -16,22 +19,17 @@ use function Safe\json_decode;
  */
 class ClassificationResponseParser
 {
-    /**
-     * Parse the LLM classification response.
-     *
-     * @param  string  $response  The raw LLM response
-     * @param  int|null  $skillId  The skill ID to associate with mappings
-     * @return array Array of parsed mappings
-     */
-    public function parse(string $response, ?int $skillId = null): array
+    public function parse(string $response, ?int $skillId = null): IntentMappingDTOCollection
     {
+        $mappings = new IntentMappingDTOCollection;
+
         // Try to extract JSON array from response
         if (! preg_match('/\[[\s\S]*\]/s', $response, $match)) {
             MultiLogger::warning('No JSON array found in LLM response', [
                 'response_preview' => substr($response, 0, 500),
             ]);
 
-            return [];
+            return $mappings;
         }
 
         try {
@@ -41,15 +39,14 @@ class ClassificationResponseParser
                 'error' => $e->getMessage(),
             ]);
 
-            return [];
+            return $mappings;
         }
 
         if (! is_array($decoded)) {
-            return [];
+            return $mappings;
         }
 
         // Validate and normalize each mapping
-        $mappings = [];
         foreach ($decoded as $item) {
             if (! is_array($item)) {
                 continue;
@@ -60,13 +57,14 @@ class ClassificationResponseParser
                 continue;
             }
 
-            $mappings[] = [
-                'sample_intent' => $item['sample_intent'],
-                'keywords' => $item['keywords'] ?? [],
-                'skill_id' => $skillId,
-                'confidence' => (float) ($item['confidence'] ?? 0.8),
-                'category' => $item['category'] ?? 'unknown',
-            ];
+            $mappings->add(
+                IntentMappingDTO::fromArray([
+                    'sampleIntent' => $item['sample_intent'],
+                    'keywords' => $item['keywords'] ?? [],
+                    'confidence' => (float) ($item['confidence'] ?? 0.8),
+                    'category' => $item['category'] ?? 'unknown',
+                ], $skillId)
+            );
         }
 
         return $mappings;

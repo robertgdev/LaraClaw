@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Discovery;
 
+use function Safe\preg_split;
+use function Safe\preg_match;
+
 /**
  * Parses the text output from `npx skills find`.
  *

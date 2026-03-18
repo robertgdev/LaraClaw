@@ -1,8 +1,10 @@
 <?php
 
+use App\DTOs\ParsedSkillDTO;
 use App\Models\Skill;
 use App\Services\Skills\SkillChecksumCalculator;
 use App\Services\Skills\SkillSyncService;
+use App\TypedCollections\ParsedSkillDTOCollection;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
@@ -22,20 +24,25 @@ describe('SkillSyncService', function () {
             mkdir($dir);
             file_put_contents($dir.'/SKILL.md', 'Test skill');
 
-            $result = $this->syncService->syncFromIndex([
-                'test-skill' => [
-                    'name' => 'test-skill',
-                    'dir_name' => 'test-skill',
-                    'path' => $dir,
-                    'directory' => $dir,
-                    'source_type' => 'core',
-                    'description' => 'Test skill',
-                    'keywords' => ['test'],
-                ],
-            ]);
+            $skillDto = new ParsedSkillDTO(
+                name: 'test-skill',
+                dirName: 'test-skill',
+                description: 'Test skill',
+                path: $dir.'/SKILL.md',
+                directory: $dir,
+                keywords: ['test'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+                license: null,
+            );
 
-            expect($result['created'])->toBe(1)
-                ->and($result['updated'])->toBe(0)
+            $result = $this->syncService->syncFromIndex(
+                new ParsedSkillDTOCollection([$skillDto])
+            );
+
+            expect($result->created)->toBe(1)
+                ->and($result->updated)->toBe(0)
                 ->and(Skill::count())->toBe(1);
 
             File::deleteDirectory($dir);
@@ -60,41 +67,72 @@ describe('SkillSyncService', function () {
                 'intents_count' => 5,
             ]);
 
-            // Sync with same directory (same checksum)
-            $this->syncService->syncFromIndex([
-                'classified-skill' => [
-                    'name' => 'classified-skill',
-                    'dir_name' => 'classified-skill',
-                    'path' => $dir,
-                    'directory' => $dir,
-                    'source_type' => 'core',
-                    'description' => 'Classified',
-                    'keywords' => [],
-                ],
-            ]);
+            $skillDto = new ParsedSkillDTO(
+                name: 'classified-skill',
+                dirName: 'classified-skill',
+                description: 'Classified',
+                path: $dir.'/SKILL.md',
+                directory: $dir,
+                keywords: ['test'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+                license: null,
+            );
 
-            $skill = Skill::findByName('classified-skill');
+            // Sync with same directory (same checksum)
+            $result = $this->syncService->syncFromIndex(
+                new ParsedSkillDTOCollection([$skillDto])
+            );
+
+            // Status should be preserved
+            $skill = Skill::where('name', 'classified-skill')->first();
             expect($skill->classification_status)->toBe(Skill::STATUS_CLASSIFIED);
 
             File::deleteDirectory($dir);
         });
 
         it('deactivates skills not in index', function () {
+            // Create an existing skill
             Skill::create([
                 'name' => 'old-skill',
                 'dir_name' => 'old-skill',
-                'path' => '/tmp/old',
+                'path' => '/tmp/old-skill',
                 'source_type' => 'core',
                 'description' => 'Old skill',
-                'checksum' => 'abc123',
+                'checksum' => 'old-checksum',
                 'is_active' => true,
             ]);
 
-            $result = $this->syncService->syncFromIndex([]);
+            $dir = sys_get_temp_dir().'/sync_deactivate_'.uniqid();
+            mkdir($dir);
+            file_put_contents($dir.'/SKILL.md', 'New skill');
 
-            expect($result['deactivated'])->toBe(1);
-            $skill = Skill::findByName('old-skill');
-            expect($skill->is_active)->toBeFalse();
+            $skillDto = new ParsedSkillDTO(
+                name: 'new-skill',
+                dirName: 'new-skill',
+                description: 'New skill',
+                path: $dir.'/SKILL.md',
+                directory: $dir,
+                keywords: ['new'],
+                hasScripts: false,
+                hasReferences: false,
+                hasAssets: false,
+                license: null,
+            );
+
+            // Sync with only new skill
+            $result = $this->syncService->syncFromIndex(
+                new ParsedSkillDTOCollection([$skillDto])
+            );
+
+            expect($result->created)->toBe(1)
+                ->and($result->deactivated)->toBe(1);
+
+            $oldSkill = Skill::where('name', 'old-skill')->first();
+            expect($oldSkill->is_active)->toBeFalse();
+
+            File::deleteDirectory($dir);
         });
     });
 });

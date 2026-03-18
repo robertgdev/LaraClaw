@@ -73,15 +73,7 @@ class PromptBuilderService
      * 6. Memory Context - Relevant memories from episodic/key-value memory
      *
      * @param  string  $agentDir  The agent's working directory
-     * @param  array  $options  Optional parameters:
-     *                          - teammates: array of teammate info ['id' => string, 'name' => string, 'model' => string][]
-     *                          - custom_prompt: string|null Custom prompt from database
-     *                          - agent_id: string The agent's ID (for self-reference)
-     *                          - agent_name: string The agent's display name
-     *                          - agent_model: string The agent's model
-     *                          - sender_id: string|null The sender's ID (for memory context)
-     *                          - channel: ChannelEnum|null The channel (for memory context)
-     *                          - message: string|null The user message (for memory search)
+     * @param  array{teammates?: array<int, array{id: string, name: string, model: string}>, custom_prompt?: string|null, agent_id?: string, agent_name?: string, agent_model?: string, sender_id?: string|null, channel?: ChannelEnum|null, message?: string|null}  $options  Optional parameters
      * @return string The compiled system prompt
      */
     public function buildSystemPrompt(string $agentDir, array $options = []): string
@@ -123,13 +115,14 @@ class PromptBuilderService
             }
         }
 
-        // 5. Memory context (episodic + key-value memory)
+        // 5. Memory context (episodic + key-value memory + lossless)
         if ($this->memoryService !== null && ! empty($options['sender_id']) && ! empty($options['channel'])) {
             $memoryBuilder = new MemoryContextBuilder($this->memoryService);
             $memoryContext = $memoryBuilder->build(
                 $options['sender_id'],
                 $options['channel'],
-                $options['message'] ?? null
+                $options['message'] ?? null,
+                $options['conversation_id'] ?? null
             );
             if ($memoryContext !== null) {
                 $sections['memory'] = $memoryContext;
@@ -182,6 +175,7 @@ class PromptBuilderService
      * Delegates to TeammatePromptInjector.
      *
      * @see TeammatePromptInjector::inject()
+     * @param  array<int, array{id: string, name: string, model: string}>  $teammates
      */
     protected function injectTeammateInfo(
         string $content,
@@ -196,7 +190,7 @@ class PromptBuilderService
     /**
      * Combine sections into a single prompt with visual separators.
      *
-     * @param  array  $sections  Associative array of section name => content
+     * @param  array<string, string>  $sections  Associative array of section name => content
      * @return string The combined prompt
      */
     protected function combineSections(array $sections): string
@@ -225,6 +219,7 @@ class PromptBuilderService
      * Delegates to TeammatePromptInjector.
      *
      * @see TeammatePromptInjector::extractTeammates()
+     * @return array<int, array{id: string, name: string, model: string}>
      */
     public function extractTeammates(string $agentId, AgentCollection $agents, TeamCollection $teams): array
     {
@@ -247,7 +242,7 @@ class PromptBuilderService
      * Build system prompt with caching for performance.
      *
      * @param  string  $agentDir  The agent's working directory
-     * @param  array  $options  Options for prompt building
+     * @param  array{teammates?: array<int, array{id: string, name: string, model: string}>, custom_prompt?: string|null, agent_id?: string, agent_name?: string, agent_model?: string, sender_id?: string|null, channel?: ChannelEnum|null, message?: string|null}  $options  Options for prompt building
      * @param  int  $ttl  Cache time-to-live in seconds (default: 1 hour)
      * @return string The compiled system prompt
      */
@@ -264,7 +259,7 @@ class PromptBuilderService
      * Generate a cache key for an agent's prompt.
      *
      * @param  string  $agentDir  The agent's working directory
-     * @param  array  $options  Options that affect the prompt
+     * @param  array{teammates?: array<int, array{id: string, name: string, model: string}>, custom_prompt?: string|null, agent_id?: string, agent_name?: string, agent_model?: string, sender_id?: string|null, channel?: ChannelEnum|null, message?: string|null}  $options  Options that affect the prompt
      * @return string The cache key
      */
     protected function getCacheKey(string $agentDir, array $options = []): string

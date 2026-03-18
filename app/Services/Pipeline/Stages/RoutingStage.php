@@ -64,16 +64,16 @@ class RoutingStage implements MessagePipelineStage
 
         if (! $agentId || ! isset($context->agents[$agentId])) {
             $routing = $this->routingService->parseAgentRouting($message, $context->agents, $context->teams);
-            $agentId = $routing['agentId'];
-            $message = $routing['message'];
-            $isTeamRouted = $routing['isTeam'] ?? false;
+            $agentId = $routing->agentId;
+            $message = $routing->message;
+            $isTeamRouted = $routing->isTeam;
         }
 
         // Easter egg: multiple agent mentions
         if (! $context->isInternal && $agentId === 'error' && $routing !== null) {
             MultiLogger::info('Multiple agents detected, sending easter egg message');
-            $this->deliveryService->sendResponse($context->message, $routing['message']);
-            $context->markHandled($routing['message']);
+            $this->deliveryService->sendResponse($context->message, $routing->message);
+            $context->markHandled($routing->message);
 
             return $context;
         }

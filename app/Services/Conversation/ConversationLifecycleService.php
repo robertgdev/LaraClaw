@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Conversation;
 
 use App\Enums\ChannelEnum;
-use App\Logging\MultiLogger;
 use App\Models\Conversation;
 use App\Services\MemoryEngineService;
 use Illuminate\Support\Str;
@@ -17,7 +16,6 @@ use Illuminate\Support\Str;
  * - Finding or creating conversations
  * - Adding user messages and agent responses
  * - Updating conversation metadata (title, last message timestamp)
- * - Recording episodic memory events
  *
  * Both CommandProcessingService (WebSocket) and ProcessMessageJob (queue) delegate
  * to this service, eliminating duplicated conversation management logic.
@@ -27,7 +25,7 @@ class ConversationLifecycleService
     protected ?MemoryEngineService $memoryService = null;
 
     /**
-     * Set the memory service for episodic memory recording.
+     * Set the memory service for lossless context tracking.
      */
     public function setMemoryService(MemoryEngineService $memoryService): self
     {
@@ -101,8 +99,15 @@ class ConversationLifecycleService
         ?string $provider = null,
         ?string $model = null
     ): void {
+        // DEBUG: Log when recordExchange is called
+        \App\Logging\MultiLogger::info('[DEBUG] ConversationLifecycleService::recordExchange() called', [
+            'conversation_id' => $conversation->conversation_id,
+            'id' => $conversation->id,
+            'agent_id' => $agentId,
+        ]);
+
         // Add user message
-        $conversation->addUserMessage(
+        $userMsg = $conversation->addUserMessage(
             $userMessage,
             'user',
             $conversation->sender_id,
@@ -110,7 +115,7 @@ class ConversationLifecycleService
         );
 
         // Add agent response
-        $conversation->addAgentResponse(
+        $agentMsg = $conversation->addAgentResponse(
             $agentId,
             $agentName,
             $agentResponse,
@@ -121,44 +126,29 @@ class ConversationLifecycleService
         // Update conversation metadata
         $conversation->updateDerivedTitle();
         $conversation->touchLastMessage();
+
+        // Mark conversation as completed (single-turn conversations)
+        $conversation->markCompleted();
+
+        // Append to lossless context if memory service is available
+        $this->appendToLosslessContext($conversation->id, $userMsg->id, $agentMsg->id);
     }
 
     /**
-     * Record an episodic memory event for the exchange.
-     *
-     * This is a fire-and-forget operation — failures are logged but not propagated.
+     * Append messages to lossless context if enabled.
      */
-    public function recordMemory(
-        string $senderId,
-        ChannelEnum $channel,
-        string $userMessage,
-        string $agentResponse
-    ): void {
-        if (! $this->memoryService || ! $this->memoryService->isEnabled()) {
+    protected function appendToLosslessContext(int $conversationId, int $userMessageId, int $agentMessageId): void
+    {
+        if ($this->memoryService === null) {
             return;
         }
 
-        $content = $this->memoryService->truncateText('User: '.$userMessage);
-        $outcome = $this->memoryService->truncateText($agentResponse);
-
-        // If truncation returns null, memory is disabled
-        if ($content === null || $outcome === null) {
+        if (! $this->memoryService->isLosslessEnabled()) {
             return;
         }
 
-        try {
-            $this->memoryService->recordEvent(
-                $senderId,
-                $channel,
-                [
-                    'type' => 'task_completed',
-                    'content' => $content,
-                    'outcome' => $outcome,
-                ]
-            );
-        } catch (\Exception $e) {
-            MultiLogger::warning("Failed to record episodic event: {$e->getMessage()}");
-        }
+        // Append both messages to the context
+        $this->memoryService->appendMessagesToContext($conversationId, [$userMessageId, $agentMessageId]);
     }
 
     /**
@@ -172,7 +162,6 @@ class ConversationLifecycleService
             ChannelEnum::WHATSAPP => 'whatsapp',
             ChannelEnum::CLI => 'cli',
             ChannelEnum::WEBSOCKET => 'ws',
-            default => 'unknown',
         };
 
         return "{$prefix}_".substr($conversationId, 0, 8);

@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\Setup;
 
+use App\DTOs\SymlinkResultDTO;
+use App\DTOs\TemplateCopyResultDTO;
+use App\DTOs\WorkspaceInitResultDTO;
 use Illuminate\Support\Facades\File;
 
+use function Safe\exec;
 use function Safe\symlink;
 
 /**
@@ -22,9 +26,8 @@ class SetupWorkspaceInitializer
      * @param  string  $workspacePath  Root workspace path
      * @param  string  $defaultAgentId  Default agent ID
      * @param  array<int, array{agent_id: string}>  $additionalAgents  Additional agents
-     * @return array<int, string> Messages describing what was created
      */
-    public function createDirectories(string $workspacePath, string $defaultAgentId, array $additionalAgents = []): array
+    public function createDirectories(string $workspacePath, string $defaultAgentId, array $additionalAgents = []): WorkspaceInitResultDTO
     {
         $messages = [];
 
@@ -42,7 +45,7 @@ class SetupWorkspaceInitializer
         }
 
         // Copy templates to default agent
-        $messages = array_merge($messages, $this->copyAgentTemplates($defaultAgentDir, $defaultAgentId));
+        $messages = array_merge($messages, $this->copyAgentTemplates($defaultAgentDir, $defaultAgentId)->messages);
 
         // Additional agent directories
         foreach ($additionalAgents as $agent) {
@@ -51,7 +54,7 @@ class SetupWorkspaceInitializer
                 File::makeDirectory($agentDir, 0755, true);
                 $messages[] = "Created agent directory: {$agentDir}";
             }
-            $messages = array_merge($messages, $this->copyAgentTemplates($agentDir, $agent['agent_id']));
+            $messages = array_merge($messages, $this->copyAgentTemplates($agentDir, $agent['agent_id'])->messages);
         }
 
         // Files directory
@@ -61,15 +64,13 @@ class SetupWorkspaceInitializer
             $messages[] = "Created files directory: {$filesDir}";
         }
 
-        return $messages;
+        return new WorkspaceInitResultDTO(messages: $messages);
     }
 
     /**
      * Copy template files to an agent's working directory.
-     *
-     * @return array<int, string> Messages describing what was copied
      */
-    public function copyAgentTemplates(string $agentDir, string $agentId): array
+    public function copyAgentTemplates(string $agentDir, string $agentId): WorkspaceInitResultDTO
     {
         $templatesDir = $this->getTemplatesDir();
         $messages = [];
@@ -139,15 +140,13 @@ class SetupWorkspaceInitializer
             }
         }
 
-        return $messages;
+        return new WorkspaceInitResultDTO(messages: $messages);
     }
 
     /**
      * Copy template files from resources/laraclaw to the workspace.
-     *
-     * @return array{copied: int, skipped: int, messages: array<int, string>}
      */
-    public function copyTemplateFilesToStorage(string $workspaceName): array
+    public function copyTemplateFilesToStorage(string $workspaceName): TemplateCopyResultDTO
     {
         $sourceDir = resource_path('laraclaw');
         $targetDir = storage_path("app/{$workspaceName}");
@@ -156,12 +155,20 @@ class SetupWorkspaceInitializer
         $skipped = 0;
 
         if (! File::isDirectory($sourceDir)) {
-            return ['copied' => 0, 'skipped' => 0, 'messages' => ['No template files found in resources/laraclaw - skipping.']];
+            return new TemplateCopyResultDTO(
+                copied: 0,
+                skipped: 0,
+                messages: ['No template files found in resources/laraclaw - skipping.']
+            );
         }
 
         $files = File::allFiles($sourceDir);
         if (empty($files)) {
-            return ['copied' => 0, 'skipped' => 0, 'messages' => ['No template files found in resources/laraclaw - skipping.']];
+            return new TemplateCopyResultDTO(
+                copied: 0,
+                skipped: 0,
+                messages: ['No template files found in resources/laraclaw - skipping.']
+            );
         }
 
         foreach ($files as $file) {
@@ -184,34 +191,32 @@ class SetupWorkspaceInitializer
             $copied++;
         }
 
-        return ['copied' => $copied, 'skipped' => $skipped, 'messages' => $messages];
+        return new TemplateCopyResultDTO(copied: $copied, skipped: $skipped, messages: $messages);
     }
 
     /**
      * Create a symlink from .agents to storage/app/{workspace}/agents.
-     *
-     * @return array{created: bool, message: string}
      */
-    public function createAgentsSymlink(string $workspaceName): array
+    public function createAgentsSymlink(string $workspaceName): SymlinkResultDTO
     {
         $targetLink = base_path('.agents');
         $agentsSource = storage_path("app/$workspaceName/agents");
 
         if (! File::isDirectory($agentsSource)) {
-            return ['created' => false, 'message' => 'No agents directory found - skipping symlink.'];
+            return SymlinkResultDTO::skipped('No agents directory found - skipping symlink.');
         }
 
         if (File::exists($targetLink) || is_link($targetLink)) {
-            return ['created' => false, 'message' => 'Agents symlink already exists at .agents'];
+            return SymlinkResultDTO::skipped('Agents symlink already exists at .agents');
         }
 
         $created = $this->createCrossPlatformSymlink($agentsSource, $targetLink);
 
         if ($created) {
-            return ['created' => true, 'message' => "Created symlink: .agents → storage/app/$workspaceName/agents/"];
+            return SymlinkResultDTO::created("Created symlink: .agents → storage/app/$workspaceName/agents/");
         }
 
-        return ['created' => false, 'message' => 'Could not create agents symlink. May need elevated privileges.'];
+        return SymlinkResultDTO::skipped('Could not create agents symlink. May need elevated privileges.');
     }
 
     /**

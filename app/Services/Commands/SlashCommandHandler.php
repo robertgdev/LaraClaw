@@ -8,6 +8,7 @@ use App\DTOs\CommandResponseDTO;
 use App\Logging\MultiLogger;
 use App\Services\ConversationHistoryService;
 use App\Services\SettingsService;
+use function Safe\preg_split;
 
 /**
  * Handles slash commands (e.g. /agents, /teams, /status, /history).
@@ -23,6 +24,8 @@ class SlashCommandHandler
 
     /**
      * Handle slash commands.
+     *
+     * @param  array<string, mixed>  $context
      */
     public function handle(string $message, array $context = []): CommandResponseDTO
     {
@@ -118,6 +121,8 @@ class SlashCommandHandler
 
     /**
      * Get server status.
+     *
+     * @param  array<string, mixed>  $context
      */
     public function getStatus(array $context = []): CommandResponseDTO
     {
@@ -151,10 +156,10 @@ class SlashCommandHandler
 
         $displayHistory = array_map(function ($entry) {
             return [
-                'timestamp' => $entry['date'] ?? 'unknown',
-                'from' => $entry['sender'] ?? 'unknown',
+                'timestamp' => $entry['date'],
+                'from' => $entry['sender'],
                 'to' => $entry['team_id'] ?? 'agent',
-                'message' => $entry['preview'] ?? '',
+                'message' => $entry['preview'],
             ];
         }, $history);
 

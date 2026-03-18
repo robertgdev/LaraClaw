@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use App\DTOs\SkillDTO;
+use App\DTOs\SkillFileDTO;
 use App\Services\ResponseParserService;
 use App\Services\ScriptExecutionService;
 use App\Services\SettingsService;
 use App\Services\SkillSearchService;
+use App\TypedCollections\SkillDTOCollection;
+use App\TypedCollections\SkillFileDTOCollection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 
@@ -39,15 +43,30 @@ SH);
     $this->settings = Mockery::mock(SettingsService::class);
     $this->settings->shouldReceive('getWorkspacePath')->andReturn($this->testWorkspace);
 
+    // Create test skill DTO
+    $testSkillDTO = new SkillDTO(
+        name: 'test-skill',
+        dirName: 'test-skill',
+        description: 'A test skill for unit testing',
+        path: $this->testSkillDir.'/SKILL.md',
+        directory: $this->testSkillDir,
+        keywords: [],
+        hasScripts: true,
+        hasReferences: false,
+        hasAssets: false,
+    );
+
+    // Create test script DTO
+    $testScriptDTO = new SkillFileDTO(
+        name: 'echo_test.sh',
+        path: $this->testSkillDir.'/scripts/echo_test.sh',
+    );
+
     // Mock skill search
     $this->skillSearch = Mockery::mock(SkillSearchService::class);
     $this->skillSearch->shouldReceive('getSkill')
         ->with('test-skill')
-        ->andReturn([
-            'name' => 'test-skill',
-            'directory' => $this->testSkillDir,
-            'has_scripts' => true,
-        ]);
+        ->andReturn($testSkillDTO);
     $this->skillSearch->shouldReceive('getSkill')
         ->withArgs(fn ($name) => $name !== 'test-skill')
         ->andReturn(null);
@@ -56,18 +75,10 @@ SH);
             ['type' => 'core', 'path' => $this->testWorkspace.'/.agents/skills'],
         ]);
     $this->skillSearch->shouldReceive('getAllSkills')
-        ->andReturn([
-            'test-skill' => [
-                'name' => 'test-skill',
-                'directory' => $this->testSkillDir,
-                'has_scripts' => true,
-            ],
-        ]);
+        ->andReturn(new SkillDTOCollection([$testSkillDTO]));
     $this->skillSearch->shouldReceive('getSkillScripts')
         ->with('test-skill')
-        ->andReturn([
-            ['name' => 'echo_test.sh', 'path' => $this->testSkillDir.'/scripts/echo_test.sh'],
-        ]);
+        ->andReturn(new SkillFileDTOCollection([$testScriptDTO]));
 
     // Set config
     Config::set('laraclaw.script_execution', [
@@ -104,7 +115,7 @@ describe('ResponseParserService', function () {
         it('detects direct commands in code blocks', function () {
             $response = 'I will check that.```execute: echo "hello"```';
 
-            $hasExecute = $this->parser->hasExecuteRequests($response);
+            $hasExecute = $this->parser->hasExecuteBlocks($response);
 
             expect($hasExecute)->toBeTrue();
         });
@@ -112,7 +123,7 @@ describe('ResponseParserService', function () {
         it('detects direct commands in brackets', function () {
             $response = 'I will check that. [execute: echo "hello"]';
 
-            $hasExecute = $this->parser->hasExecuteRequests($response);
+            $hasExecute = $this->parser->hasExecuteBlocks($response);
 
             expect($hasExecute)->toBeTrue();
         });
@@ -120,7 +131,7 @@ describe('ResponseParserService', function () {
         it('detects script paths in code blocks', function () {
             $response = '```execute: scripts/echo_test.sh```';
 
-            $hasExecute = $this->parser->hasExecuteRequests($response);
+            $hasExecute = $this->parser->hasExecuteBlocks($response);
 
             expect($hasExecute)->toBeTrue();
         });
@@ -128,7 +139,7 @@ describe('ResponseParserService', function () {
         it('returns false when no execute requests', function () {
             $response = 'Just some regular text without execute blocks.';
 
-            $hasExecute = $this->parser->hasExecuteRequests($response);
+            $hasExecute = $this->parser->hasExecuteBlocks($response);
 
             expect($hasExecute)->toBeFalse();
         });

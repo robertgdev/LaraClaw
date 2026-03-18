@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ScriptExecution;
 
-use App\DTOs\ScriptExecutionResult;
+use App\DTOs\ScriptExecutionResultDTO;
 use App\Logging\MultiLogger;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\File;
@@ -37,13 +37,15 @@ class SandboxedExecutor
 
     /**
      * Execute a command with sandboxing.
+     *
+     * @param  array<int, string>  $args
      */
     public function run(
         string $command,
         ?string $workingDir = null,
         ?string $scriptPath = null,
         array $args = []
-    ): ScriptExecutionResult {
+    ): ScriptExecutionResultDTO {
         $workingDir = $workingDir ?? $this->settings->getWorkspacePath();
 
         // Ensure working directory exists
@@ -84,7 +86,7 @@ class SandboxedExecutor
                     'output_length' => strlen($result->output()),
                 ]);
 
-                return ScriptExecutionResult::success(
+                return ScriptExecutionResultDTO::success(
                     output: $output,
                     duration: $duration,
                     scriptPath: $scriptPath,
@@ -97,7 +99,7 @@ class SandboxedExecutor
                 'error' => $result->errorOutput(),
             ]);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 message: $result->errorOutput() ?: "Script exited with code {$result->exitCode()}",
                 exitCode: $result->exitCode(),
                 output: $output,
@@ -114,7 +116,7 @@ class SandboxedExecutor
                 'duration' => $duration,
             ]);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 message: "Script timed out after {$this->timeout} seconds",
                 exitCode: 124, // Standard timeout exit code
                 duration: $duration,
@@ -128,7 +130,7 @@ class SandboxedExecutor
                 'error' => $e->getMessage(),
             ]);
 
-            return ScriptExecutionResult::error(
+            return ScriptExecutionResultDTO::error(
                 message: "Execution error: {$e->getMessage()}",
                 duration: $duration,
                 scriptPath: $scriptPath,

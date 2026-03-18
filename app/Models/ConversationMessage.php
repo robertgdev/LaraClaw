@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\ChannelEnum;
+use App\Enums\FeedbackEnum;
 use App\Enums\MessageStatusEnum;
 use App\Enums\QueueTypeEnum;
 use Database\Factories\ConversationMessageFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -19,6 +22,10 @@ use Illuminate\Support\Str;
  * - Each message belongs to a conversation (via conversation_id)
  * - Messages have a direction: 'incoming' (from user) or 'outgoing' (from agent)
  * - All message content is stored here, not in the conversations table
+ * - Supports user feedback (positive, negative, neutral)
+ *
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
  */
 class ConversationMessage extends Model
 {
@@ -45,6 +52,9 @@ class ConversationMessage extends Model
         'error_message',
         'processed_at',
         'reply_to',
+        'feedback',
+        'feedback_comment',
+        'feedback_at',
     ];
 
     protected $casts = [
@@ -54,6 +64,8 @@ class ConversationMessage extends Model
         'queue_type' => QueueTypeEnum::class,
         'channel' => ChannelEnum::class,
         'processed_at' => 'datetime',
+        'feedback' => FeedbackEnum::class,
+        'feedback_at' => 'datetime',
     ];
 
     protected $attributes = [
@@ -71,6 +83,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the agent this message belongs to.
+     *
+     * @return BelongsTo<Agent, $this>
      */
     public function agent(): BelongsTo
     {
@@ -79,6 +93,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the conversation this message belongs to.
+     *
+     * @return BelongsTo<Conversation, $this>
      */
     public function conversation(): BelongsTo
     {
@@ -87,6 +103,8 @@ class ConversationMessage extends Model
 
     /**
      * Get the message this is a reply to.
+     *
+     * @return BelongsTo<ConversationMessage, $this>
      */
     public function replyTo(): BelongsTo
     {
@@ -95,9 +113,12 @@ class ConversationMessage extends Model
 
     /**
      * Get replies to this message.
+     *
+     * @return HasMany<ConversationMessage, ConversationMessage>
      */
-    public function replies()
+    public function replies(): HasMany
     {
+        /** @var HasMany<ConversationMessage, ConversationMessage> */
         return $this->hasMany(ConversationMessage::class, 'reply_to', 'id');
     }
 
@@ -119,82 +140,145 @@ class ConversationMessage extends Model
 
     /**
      * Scope for incoming messages (from users).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeIncoming($query)
+    public function scopeIncoming(Builder $query): Builder
     {
         return $query->where('direction', self::DIRECTION_INCOMING);
     }
 
     /**
      * Scope for outgoing messages (from agents).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeOutgoing($query)
+    public function scopeOutgoing(Builder $query): Builder
     {
         return $query->where('direction', self::DIRECTION_OUTGOING);
     }
 
     /**
      * Scope for pending messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopePending($query)
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::PENDING);
     }
 
     /**
      * Scope for processing messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeProcessing($query)
+    public function scopeProcessing(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::PROCESSING);
     }
 
     /**
      * Scope for completed messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeCompleted($query)
+    public function scopeCompleted(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::COMPLETED);
     }
 
     /**
      * Scope for failed messages.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeFailed($query)
+    public function scopeFailed(Builder $query): Builder
     {
         return $query->where('status', MessageStatusEnum::FAILED);
     }
 
     /**
      * Scope for incoming queue type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeQueueIncoming($query)
+    public function scopeQueueIncoming(Builder $query): Builder
     {
         return $query->where('queue_type', QueueTypeEnum::INCOMING);
     }
 
     /**
      * Scope for outgoing queue type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeQueueOutgoing($query)
+    public function scopeQueueOutgoing(Builder $query): Builder
     {
         return $query->where('queue_type', QueueTypeEnum::OUTGOING);
     }
 
     /**
      * Scope for processing queue type.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeQueueProcessing($query)
+    public function scopeQueueProcessing(Builder $query): Builder
     {
         return $query->where('queue_type', QueueTypeEnum::PROCESSING);
     }
 
     /**
      * Scope for specific channel.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeForChannel($query, ChannelEnum $channel)
+    public function scopeForChannel(Builder $query, ChannelEnum $channel): Builder
     {
         return $query->where('channel', $channel);
+    }
+
+    /**
+     * Scope for messages with positive feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopePositiveFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::POSITIVE);
+    }
+
+    /**
+     * Scope for messages with negative feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeNegativeFeedback(Builder $query): Builder
+    {
+        return $query->where('feedback', FeedbackEnum::NEGATIVE);
+    }
+
+    /**
+     * Scope for messages with any feedback.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeWithFeedback(Builder $query): Builder
+    {
+        return $query->whereNotNull('feedback');
     }
 
     // ==========================================
@@ -252,11 +336,65 @@ class ConversationMessage extends Model
     }
 
     // ==========================================
+    // Feedback Methods
+    // ==========================================
+
+    /**
+     * Set feedback for this message.
+     *
+     * Uses withoutTimestamps() so that recording feedback does not alter updated_at.
+     */
+    public function setFeedback(FeedbackEnum $feedback, ?string $comment = null): void
+    {
+        static::withoutTimestamps(function () use ($feedback, $comment) {
+            $this->update([
+                'feedback' => $feedback,
+                'feedback_comment' => $comment,
+                'feedback_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Check if this message has feedback.
+     */
+    public function hasFeedback(): bool
+    {
+        return $this->feedback !== null;
+    }
+
+    /**
+     * Check if this message has positive feedback.
+     */
+    public function hasPositiveFeedback(): bool
+    {
+        return $this->feedback?->isPositive() ?? false;
+    }
+
+    /**
+     * Check if this message has negative feedback.
+     */
+    public function hasNegativeFeedback(): bool
+    {
+        return $this->feedback?->isNegative() ?? false;
+    }
+
+    // ==========================================
     // Factory Methods
     // ==========================================
 
     /**
      * Create an incoming message (from user).
+     *
+     * @param array{
+     *     conversation_id: string,
+     *     channel: ChannelEnum,
+     *     sender: string,
+     *     sender_id: string|null,
+     *     message: string,
+     *     fullMessage?: string,
+     *     agent_id?: string
+     * } $data
      */
     public static function createIncoming(array $data): self
     {
@@ -269,6 +407,22 @@ class ConversationMessage extends Model
 
     /**
      * Create an outgoing message (from agent).
+     *
+     * @param array{
+     *      conversation_id: string,
+     *      channel: ChannelEnum,
+     *      sender: string,
+     *      sender_id: string|null,
+     *      message: string,
+     *      agent_id: string|null,
+     *      provider?: string|null,
+     *      model?: string|null,
+     *      files?: array<int, string>|null,
+     *      is_llm?: bool,
+     *      reply_to?: int|null,
+     *      status?: MessageStatusEnum,
+     *      processed_at?: string|null
+     *  } $data
      */
     public static function createOutgoing(array $data): self
     {
@@ -284,7 +438,23 @@ class ConversationMessage extends Model
     // ==========================================
 
     /**
-     * Convert to array format compatible with Node.js version.
+     * Convert to array format
+     *
+     * @return array{
+     *       channel: string,
+     *       sender: string,
+     *       senderId: string|null,
+     *       message: string,
+     *       timestamp: int,
+     *       messageId: string,
+     *       agent: string|null,
+     *       files: array<int, string>|null,
+     *       conversationId: string,
+     *       direction: string,
+     *       isInternal: bool,
+     *       feedback: int|null,
+     *       feedbackComment: string|null,
+     *   }
      */
     public function toMessageData(): array
     {
@@ -300,11 +470,28 @@ class ConversationMessage extends Model
             'conversationId' => $this->conversation_id,
             'direction' => $this->direction,
             'isInternal' => $this->is_internal,
+            'feedback' => $this->feedback?->value,
+            'feedbackComment' => $this->feedback_comment,
         ];
     }
 
     /**
      * Convert to response data format.
+     *
+     * @return array{
+     *        channel: string,
+     *        sender: string,
+     *        senderId: string|null,
+     *        message: string,
+     *        timestamp: int,
+     *        messageId: string,
+     *        agent: string|null,
+     *        files: array<int, string>|null,
+     *        provider: string|null,
+     *        model: string|null,
+     *        feedback: int|null,
+     *        feedbackComment: string|null,
+     *    }
      */
     public function toResponseData(): array
     {
@@ -319,6 +506,8 @@ class ConversationMessage extends Model
             'files' => $this->files,
             'provider' => $this->provider,
             'model' => $this->model,
+            'feedback' => $this->feedback?->value,
+            'feedbackComment' => $this->feedback_comment,
         ];
     }
 }

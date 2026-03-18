@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\ResponseParser;
 
+use function Safe\preg_match;
+use function Safe\preg_match_all;
+use function Safe\preg_replace_callback;
+
 /**
  * Detects and extracts execute request blocks from AI responses.
  *
@@ -51,6 +55,14 @@ class ExecuteBlockDetector
     }
 
     /**
+     * Alias for hasExecuteRequests().
+     */
+    public function hasExecuteBlocks(string $response): bool
+    {
+        return $this->hasExecuteRequests($response);
+    }
+
+    /**
      * Get detection details for debugging.
      *
      * @return array{code_block: bool, bracket: bool, multiline: bool, bare: bool}
@@ -68,7 +80,7 @@ class ExecuteBlockDetector
     /**
      * Extract all execute request commands from a response without replacing them.
      *
-     * @return array<int, array{command: string, format: string}>
+     * @return array<int, array{command: string, format: string, full_match: string}>
      */
     public function extractAll(string $response): array
     {
@@ -80,6 +92,7 @@ class ExecuteBlockDetector
             $requests[] = [
                 'command' => trim($match[1]).' '.trim($match[2]),
                 'format' => 'multiline',
+                'full_match' => $match[0],
             ];
         }
 
@@ -89,6 +102,7 @@ class ExecuteBlockDetector
             $requests[] = [
                 'command' => trim($match[1]),
                 'format' => 'code_block',
+                'full_match' => $match[0],
             ];
         }
 
@@ -98,6 +112,7 @@ class ExecuteBlockDetector
             $requests[] = [
                 'command' => trim($match[1]),
                 'format' => 'bracket',
+                'full_match' => $match[0],
             ];
         }
 
@@ -107,6 +122,7 @@ class ExecuteBlockDetector
             $requests[] = [
                 'command' => trim($match[1]),
                 'format' => 'bare',
+                'full_match' => $match[0],
             ];
         }
 

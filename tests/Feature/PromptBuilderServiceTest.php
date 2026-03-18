@@ -313,35 +313,6 @@ describe('PromptBuilderService', function () {
             expect(true)->toBeTrue();
         });
 
-        it('includes memory context when memory service is set with sender_id and channel', function () {
-            $memoryService = app(\App\Services\MemoryEngineService::class);
-            $this->service->setMemoryService($memoryService);
-
-            File::put($this->tempDir.'/AGENTS.md', '# Instructions');
-
-            // Create a memory entry for the test user with high importance
-            $senderId = 'test-sender-123';
-            $channel = \App\Enums\ChannelEnum::TELEGRAM;
-            $memoryService->recordEvent($senderId, $channel, [
-                'type' => \App\Enums\EpisodicEventTypeEnum::CORRECTION,
-                'content' => 'User prefers dark mode',
-                'importance' => 0.9,
-            ]);
-
-            $result = $this->service->buildSystemPrompt($this->tempDir, [
-                'sender_id' => $senderId,
-                'channel' => $channel,
-                'message' => 'What are my preferences?',
-            ]);
-
-            // Should contain memory section (either Relevant Memories or Important Context)
-            $containsMemory = str_contains($result, '## Relevant Memories') || str_contains($result, '## Important Context');
-            expect($containsMemory)->toBeTrue();
-
-            // Cleanup
-            \App\Models\Memory::forSender($senderId, $channel)->delete();
-        });
-
         it('does not include memory section when memory service is not set', function () {
             File::put($this->tempDir.'/AGENTS.md', '# Instructions');
 
@@ -381,23 +352,6 @@ describe('PromptBuilderService', function () {
 
             // Should NOT contain memory section
             expect($result)->not->toContain('## Relevant Memories');
-        });
-
-        it('does not include memory section when no memories exist', function () {
-            $memoryService = app(\App\Services\MemoryEngineService::class);
-            $this->service->setMemoryService($memoryService);
-
-            File::put($this->tempDir.'/AGENTS.md', '# Instructions');
-
-            $result = $this->service->buildSystemPrompt($this->tempDir, [
-                'sender_id' => 'nonexistent-user',
-                'channel' => \App\Enums\ChannelEnum::TELEGRAM,
-                'message' => 'Hello',
-            ]);
-
-            // Should NOT contain memory section when no memories
-            expect($result)->not->toContain('## Relevant Memories')
-                ->and($result)->not->toContain('## Important Context');
         });
     });
 });

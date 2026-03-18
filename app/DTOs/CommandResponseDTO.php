@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Models\Team;
+use function Safe\json_encode;
+
 /**
  * Data Transfer Object for command processing responses.
  * Provides a generic, JSON-serializable response format that can be used
@@ -28,38 +31,22 @@ final class CommandResponseDTO
 
     /**
      * Create a successful response.
+     *
+     * @param  array<mixed>  $data
      */
-    public static function success(
-        string $type,
-        string $message,
-        array $data = [],
-        int $code = 200
-    ): self {
-        return new self(
-            type: $type,
-            message: $message,
-            data: $data,
-            code: $code,
-            success: true
-        );
+    public static function success(string $type, string $message, array $data = [], int $code = 200): self
+    {
+        return new self(type: $type, message: $message, data: $data, code: $code, success: true);
     }
 
     /**
      * Create an error response.
+     *
+     * @param  array<mixed>  $data
      */
-    public static function error(
-        string $message,
-        int $code = 400,
-        string $type = 'error',
-        array $data = []
-    ): self {
-        return new self(
-            type: $type,
-            message: $message,
-            data: $data,
-            code: $code,
-            success: false
-        );
+    public static function error(string $message, int $code = 400, string $type = 'error', array $data = []): self
+    {
+        return new self(type: $type, message: $message, data: $data, code: $code, success: false);
     }
 
     /**
@@ -80,14 +67,9 @@ final class CommandResponseDTO
         if (empty($agents)) {
             $lines[] = '  No agents configured.';
         }
+        $lines = implode("\n", $lines);
 
-        return new self(
-            type: 'agents',
-            message: implode("\n", $lines),
-            data: ['agents' => $agents],
-            code: 200,
-            success: true
-        );
+        return new self(type: 'agents', message: $lines, data: ['agents' => $agents], code: 200, success: true);
     }
 
     /**
@@ -142,6 +124,7 @@ final class CommandResponseDTO
 
         // Convert teams to arrays for data
         $teamsArray = [];
+        /** @var Team $team */
         foreach ($teams as $id => $team) {
             if (is_object($team) && method_exists($team, 'toConfigArray')) {
                 $teamsArray[$id] = $team->toConfigArray();
@@ -149,14 +132,9 @@ final class CommandResponseDTO
                 $teamsArray[$id] = is_array($team) ? $team : [];
             }
         }
+        $lines = implode("\n", $lines);
 
-        return new self(
-            type: 'teams',
-            message: implode("\n", $lines),
-            data: ['teams' => $teamsArray],
-            code: 200,
-            success: true
-        );
+        return new self(type: 'teams', message: $lines, data: ['teams' => $teamsArray], code: 200, success: true);
     }
 
     /**
@@ -175,13 +153,7 @@ final class CommandResponseDTO
             $statusData['uptime_formatted'] ?? '0m'
         );
 
-        return new self(
-            type: 'status',
-            message: $status,
-            data: $statusData,
-            code: 200,
-            success: true
-        );
+        return new self(type: 'status', message: $status, data: $statusData, code: 200, success: true);
     }
 
     /**
@@ -192,13 +164,9 @@ final class CommandResponseDTO
     public static function history(array $history, int $limit): self
     {
         if (empty($history)) {
-            return new self(
-                type: 'history',
-                message: 'No conversation history found.',
-                data: ['history' => []],
-                code: 200,
-                success: true
-            );
+            $message = 'No conversation history found.';
+
+            return new self(type: 'history', message: $message, data: ['history' => []], code: 200, success: true);
         }
 
         $lines = ["Recent conversation history (last {$limit}):\n"];
@@ -210,14 +178,9 @@ final class CommandResponseDTO
             $msg = substr($entry['message'] ?? '', 0, 100);
             $lines[] = sprintf('  [%s] %s → %s: %s', $time, $from, $to, $msg);
         }
+        $lines = implode("\n", $lines);
 
-        return new self(
-            type: 'history',
-            message: implode("\n", $lines),
-            data: ['history' => $history],
-            code: 200,
-            success: true
-        );
+        return new self(type: 'history', message: $lines, data: ['history' => $history], code: 200, success: true);
     }
 
     /**
@@ -231,19 +194,15 @@ final class CommandResponseDTO
         ?string $model = null,
         ?string $conversationId = null
     ): self {
-        return new self(
-            type: 'response',
-            message: $response,
-            data: [
-                'agent_id' => $agentId,
-                'agent_name' => $agentName,
-                'provider' => $provider,
-                'model' => $model,
-                'conversation_id' => $conversationId,
-            ],
-            code: 200,
-            success: true
-        );
+        $data = [
+            'agent_id' => $agentId,
+            'agent_name' => $agentName,
+            'provider' => $provider,
+            'model' => $model,
+            'conversation_id' => $conversationId,
+        ];
+
+        return new self(type: 'response', message: $response, data: $data, code: 200, success: true);
     }
 
     /**
@@ -251,13 +210,7 @@ final class CommandResponseDTO
      */
     public static function pong(): self
     {
-        return new self(
-            type: 'pong',
-            message: 'Pong!',
-            data: [],
-            code: 200,
-            success: true
-        );
+        return new self(type: 'pong', message: 'Pong!', data: [], code: 200, success: true);
     }
 
     /**
@@ -265,13 +218,7 @@ final class CommandResponseDTO
      */
     public static function ping(): self
     {
-        return new self(
-            type: 'ping',
-            message: 'Ping!',
-            data: [],
-            code: 200,
-            success: true
-        );
+        return new self(type: 'ping', message: 'Ping!', data: [], code: 200, success: true);
     }
 
     /**
@@ -299,13 +246,7 @@ Examples:
   @coder Fix the bug in auth    → Sends to agent "coder"
 HELP;
 
-        return new self(
-            type: 'help',
-            message: $help,
-            data: [],
-            code: 200,
-            success: true
-        );
+        return new self(type: 'help', message: $help, data: [], code: 200, success: true);
     }
 
     /**

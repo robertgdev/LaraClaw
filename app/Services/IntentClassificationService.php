@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\DTOs\AgentSuggestionResultDTO;
+use App\DTOs\ExtractedEntitiesDTO;
 use App\DTOs\IntentClassificationDTO;
 use App\DTOs\SkillMatchStatisticsDTO;
 use App\Services\Intent\AgentSuggestionService;
@@ -143,16 +145,8 @@ class IntentClassificationService
      * Extract entities from the message (locations, dates, etc.).
      *
      * Delegates to EntityExtractor.
-     *
-     * @return array{
-     *     locations: string[],
-     *     dates: string[],
-     *     people: string[],
-     *     organizations: string[],
-     *     topics: string[]
-     * }
      */
-    public function extractEntities(string $message): array
+    public function extractEntities(string $message): ExtractedEntitiesDTO
     {
         return $this->entityExtractor->extract($message);
     }
@@ -164,9 +158,8 @@ class IntentClassificationService
      *
      * @param  string  $message  The user message
      * @param  AgentCollection  $agents  Collection of Agent models (keyed by agent_id)
-     * @return array{classification: IntentClassificationDTO, entities: array, suggestions: array, best_match: array|null}
      */
-    public function suggestAgent(string $message, AgentCollection $agents): array
+    public function suggestAgent(string $message, AgentCollection $agents): AgentSuggestionResultDTO
     {
         if (! $this->agentSuggestionService) {
             $this->agentSuggestionService = new AgentSuggestionService($this, $this->entityExtractor);

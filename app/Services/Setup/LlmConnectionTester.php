@@ -7,6 +7,8 @@ namespace App\Services\Setup;
 use App\Services\ProviderMapper;
 use Prism\Prism\Facades\Prism;
 
+use function Safe\putenv;
+
 /**
  * Tests LLM provider connections during setup.
  *

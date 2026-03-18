@@ -46,19 +46,34 @@ class ResponseDeliveryStage implements MessagePipelineStage
 
     public function process(MessageProcessingContext $context): MessageProcessingContext
     {
+        // DEBUG: Log the state before processing
+        /*
+        \App\Logging\MultiLogger::info('[DEBUG] ResponseDeliveryStage::process() called', [
+            'has_teamContext' => $context->teamContext !== null,
+            'has_session' => $context->session !== null,
+            'session_id' => $context->session?->id,
+            'session_conversation_id' => $context->session?->conversation_id,
+            'message_id' => $context->message->id,
+            'message_conversation_id' => $context->message->conversation_id,
+        ]);
+        */
+
         if (! $context->teamContext) {
             // Simple response
             $result = $this->deliveryService->prepareSimpleResponse($context->response);
 
             if ($context->session) {
                 $context->session->markCompleted();
+            } else {
+                // DEBUG: Log when session is null
+                \App\Logging\MultiLogger::warning('[DEBUG] ResponseDeliveryStage: session is NULL, cannot mark completed');
             }
 
             $this->deliveryService->sendResponse(
                 $context->message,
-                $result['message'],
+                $result->message,
                 $context->agentId,
-                $result['files'],
+                $result->files,
                 $context->agent['name'],
                 $context->agent['provider'] ?? null,
                 $context->agent['model'] ?? null
