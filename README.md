@@ -1,3 +1,7 @@
+# Archived
+
+This project is archived, no longer maintained and should only be used a general reference of how an OpenClaw type system  can be built on Laravel. 
+
 # LaraClaw
 
 A Laravel-based multi-agent AI orchestration framework that routes user messages across configurable LLM-powered agents and teams via multiple channels (CLI, WebSocket, Discord), with intent classification, skill discovery and execution, episodic memory, and conversation session management.
